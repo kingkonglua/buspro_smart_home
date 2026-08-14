@@ -1,0 +1,17 @@
+{
+  "domain": "buspro",
+  "name": "HDL Buspro",
+  "config_flow": true,
+  "documentation": "https://github.com/kingkonglua/buspro_smart_home",
+  "issue_tracker": "https://github.com/kingkonglua/buspro_smart_home/issues",
+  "codeowners": [
+    "@kingkonglua"
+  ],
+  "dependencies": [],
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "version": "2.0.1",
+  "iot_class": "local_push"
+}

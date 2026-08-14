@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.DS_Store
+_base_eyesoft/
+_base_fengxs/

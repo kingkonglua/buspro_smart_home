@@ -1,0 +1,74 @@
+activate_scene:
+  name: Activate scene
+  description: Activate a scene.
+  fields:
+    address:
+      name: Address
+      description: Device address (subnet id, device id).
+      required: true
+      example: "[1, 42]"
+      selector:
+        object:
+    scene_address:
+      name: Scene address
+      description: Scene number to activate.
+      required: true
+      example: "[1, 1]"
+      selector:
+        object:
+
+send_message:
+  name: Send message
+  description: Send a message.
+  fields:
+    address:
+      name: Address
+      description: Device address (subnet id, device id).
+      required: true
+      example: "[1, 42]"
+      selector:
+        object:
+    operate_code:
+      name: Operate code
+      description: Operate code.
+      required: true
+      example: "[1, 1]"
+      selector:
+        object:
+    payload:
+      name: Payload
+      description: Payload to send.
+      required: true
+      example: "[1, 100]"
+      selector:
+        object:
+
+set_universal_switch:
+  name: Set universal switch
+  description: Set a universal switch output.
+  fields:
+    address:
+      name: Address
+      description: Device address (subnet id, device id).
+      required: true
+      example: "[1, 42]"
+      selector:
+        object:
+    switch_number:
+      name: Switch number
+      description: Switch number (1-8).
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 8
+    status:
+      name: Status
+      description: Switch status (0 or 1).
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 0
+          max: 1
