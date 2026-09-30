@@ -9,6 +9,12 @@ from ..helpers.enums import *
 
 
 class Sensor(Device):
+    # G7: sensor-status / broadcast frames encode HDL's raw value as
+    # `degC + 20` (so negatives fit an unsigned byte). These device kinds use
+    # that encoding; anything else (e.g. "dlp") already reports true Celsius.
+    # Mirrors upstream v5.0.7's _CMS_BIASED_KINDS.
+    _CMS_BIASED_KINDS = ("generic", None, "12in1", "sensors_in_one", "8in1")
+
     def __init__(self, buspro, device_address, universal_switch_number=None, channel_number=None, device=None,
                  switch_number=None, name="", delay_read_current_state_seconds=0, temperature_channel=1):
         super().__init__(buspro, device_address, name)
@@ -46,7 +52,7 @@ class Sensor(Device):
         if telegram.operate_code == OperateCode.ReadSensorStatusResponse:
             if len(telegram.payload) < 8:
                 return
-            self._current_temperature = telegram.payload[1]
+            self._store_temperature(telegram.payload[1], self._cms_biased)
             brightness_high = telegram.payload[2]
             brightness_low = telegram.payload[3]
             self._motion_sensor = telegram.payload[4]
@@ -64,7 +70,7 @@ class Sensor(Device):
         elif telegram.operate_code == OperateCode.ReadSensorsInOneStatusResponse:
             if len(telegram.payload) < 10:
                 return
-            self._current_temperature = telegram.payload[1]
+            self._store_temperature(telegram.payload[1], biased=True)
             # M-10: humidity (%RH) at payload[4]. 0xFF is HDL's "no humidity
             # sensor fitted" sentinel -- keep None instead of showing 255%.
             humidity = telegram.payload[4]
@@ -76,13 +82,13 @@ class Sensor(Device):
 
         # sensors_in_one 主动推送。对齐上游 v5.0.7：0x1630 与轮询的 0x1605
         # 布局不同——没有开头的 success 字节，所有字段整体前移一格。
-        # 因此温度在 [0]（仍为 +20 偏移，由 temperature 属性校正），lux 在
-        # [1..2]。motion 字节上游在抓包确认前刻意不解析，这里同样不解析，
+        # 因此温度在 [0]（带 +20 偏移，在 ingest 时由 _store_temperature 校正），
+        # lux 在 [1..2]。motion 字节上游在抓包确认前刻意不解析，这里同样不解析，
         # 避免凭空产生误触发。
         elif telegram.operate_code == OperateCode.BroadcastSensorsInOneStatusResponse:
             if not telegram.payload:
                 return
-            self._current_temperature = telegram.payload[0]
+            self._store_temperature(telegram.payload[0], biased=True)
             if len(telegram.payload) >= 3:
                 brightness_high = telegram.payload[1]
                 brightness_low = telegram.payload[2]
@@ -97,7 +103,7 @@ class Sensor(Device):
         elif telegram.operate_code == OperateCode.BroadcastSensorStatusResponse:
             if len(telegram.payload) < 7:
                 return
-            self._current_temperature = telegram.payload[0]
+            self._store_temperature(telegram.payload[0], self._cms_biased)
             brightness_high = telegram.payload[1]
             brightness_low = telegram.payload[2]
             self._motion_sensor = telegram.payload[3]
@@ -110,10 +116,11 @@ class Sensor(Device):
         elif telegram.operate_code == OperateCode.BroadcastSensorStatusAutoResponse:
             if len(telegram.payload) < 7:
                 return
-            self._current_temperature = telegram.payload[0]
-            if self._device == "12in1":
-                self._current_temperature = self._current_temperature - 20
-            
+            # G7: the +20 bias is now applied inside _store_temperature via
+            # _cms_biased, so the old device-special-cased -20 here (and the
+            # matching exemption in the `temperature` property) is gone.
+            self._store_temperature(telegram.payload[0], self._cms_biased)
+
             brightness_high = telegram.payload[1]
             brightness_low = telegram.payload[2]
             self._motion_sensor = telegram.payload[3]
@@ -126,25 +133,29 @@ class Sensor(Device):
         elif telegram.operate_code == OperateCode.ReadFloorHeatingStatusResponse:
             if len(telegram.payload) < 2:
                 return
-            self._current_temperature = telegram.payload[1]
+            self._store_temperature(telegram.payload[1], biased=False)
             self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.BroadcastTemperatureResponse:
             if len(telegram.payload) < 2:
                 return
-            self._current_temperature = telegram.payload[1]
+            # G7: this broadcast carries the TRUE Celsius value with no +20
+            # bias, so it must NOT be corrected as if it were a raw byte.
+            # Previously the `temperature` property subtracted 20 from every
+            # non-dlp/12in1 device, so a real 26 degC frame read as 6.
+            self._store_temperature(telegram.payload[1], biased=False)
             self._call_device_updated()
 
         # M-10: MPTL/Enviro/Granite panel channel-addressed temperature
         # (0xE3E8): [channel, signed_whole_degC, <float32 LE degC>]. The whole
-        # byte carries the true value with no +20 bias, so store it as the
-        # precise reading to keep the -20 calibration off it.
+        # byte carries the true value with no +20 bias (biased=False), and the
+        # float32, when present, is preferred by the `temperature` property.
         elif telegram.operate_code == OperateCode.ReadTemperatureResponse:
             if len(telegram.payload) >= 2 and telegram.payload[0] == self._temperature_channel:
                 whole = telegram.payload[1]
                 if whole > 127:
                     whole -= 256
-                self._current_temperature = whole
+                self._store_temperature(whole, biased=False)
                 if len(telegram.payload) >= 6:
                     try:
                         self._current_temperature_precise = round(
@@ -261,20 +272,35 @@ class Sensor(Device):
             await rss.send()
 
     @property
+    def _cms_biased(self):
+        """True if this device's sensor-status frames carry HDL's +20 bias."""
+        return self._device in self._CMS_BIASED_KINDS
+
+    def _store_temperature(self, raw, biased):
+        """Normalise a raw HDL temperature byte to true Celsius and store it.
+
+        G7: applying the +20 correction here, per frame, keeps it from being
+        applied twice (some frames already carry true Celsius). Previously the
+        `temperature` property subtracted 20 from every non-dlp/12in1 device,
+        so the 0xE3E5 broadcast -- which carries the true value -- read 20 degC
+        too low (a real 26 degC frame showed as 6). Mirrors upstream v5.0.7.
+        """
+        try:
+            value = raw - 20 if biased else raw
+        except TypeError:
+            return
+        self._current_temperature = value
+
+    @property
     def temperature(self):
-        # M-10: a panel/float32 reading is already true Celsius, so prefer it
-        # over the coarse byte that still carries the +20 wire bias.
-        if self._current_temperature_precise is not None:
-            return self._current_temperature_precise
+        # Every decode branch normalises to true Celsius on arrival via
+        # _store_temperature, so no +20 correction is applied here. Prefer the
+        # sub-degree float a panel/0xE3E8 read supplies over the whole byte.
         if self._current_temperature is None:
             return None
-        # HDL protocol encodes temperature as raw = actual + 20 to avoid
-        # negatives. 12in1 already subtracts 20 at ingest, so return it raw
-        # here. Other (general) temperature sensors are NOT offset at ingest,
-        # so apply the -20 calibration here to report the true temperature.
-        if self._device is not None and self._device in ("dlp", "12in1"):
-            return self._current_temperature
-        return self._current_temperature - 20
+        if self._current_temperature_precise is not None:
+            return self._current_temperature_precise
+        return self._current_temperature
 
     @property
     def brightness(self):
