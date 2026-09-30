@@ -113,6 +113,7 @@ class BusproCover(CoverEntity):
         self._fixed_position = None   # position when not moving
         self._direction = None        # 1 opening, -1 closing, None stopped
         self._position_at_start = None
+        self._target_position = None  # 0/100 target of the active movement
         self._start_time = None
         self._stop_task = None
 
@@ -158,59 +159,82 @@ class BusproCover(CoverEntity):
         self._device.register_device_updated_cb(after_update_callback)
 
     def _sync_from_bus_status(self):
-        """Sync local movement state with the status reported by the bus."""
+        """Sync local movement state with the status reported by the bus.
+
+        State machine (M-5): a movement flag is only ever true while a tracked
+        movement is actually in progress, i.e. while the target position differs
+        from the current position.  The bus reports *end states*, not a generic
+        "moving" state:
+
+            status == 1 (CURTAIN_OPEN)  -> at the open limit,   position 100
+            status == 2 (CURTAIN_CLOSE) -> at the closed limit, position 0
+            status == 0 (CURTAIN_STOP)  -> stopped mid-way, pin the estimate
+        """
         status = self._device.status
 
-        # BUGFIX: clarify the bus status semantics used below.
-        #   status == 2 (CURTAIN_CLOSE): curtain physically closed (at closed limit)
-        #   status == 1 (CURTAIN_OPEN) : curtain physically open (at open limit)
-        #   status == 0 (CURTAIN_STOP) : stopped / parked in a middle position
         if status == CURTAIN_OPEN or status == CURTAIN_CLOSE:
-            # A limit report is absolute ground truth, NOT the start of a new
-            # movement: snap the position to 100 (open) / 0 (closed) and make
-            # sure we are not shown as still moving.
-            if self._stop_task is not None:
-                self._stop_task.cancel()
-                self._stop_task = None
-            self._direction = None
-            self._start_time = None
-            self._position_at_start = None
-            if self._supports_position:
-                self._fixed_position = 100 if status == CURTAIN_OPEN else 0
-            self._attr_is_opening = False
-            self._attr_is_closing = False
+            # Absolute ground truth: snap to the limit and clear every movement
+            # flag.  The motor is already parked, so drop the scheduled stop too.
+            position = 100 if status == CURTAIN_OPEN else 0
+            self._snap_to_limit(position, cancel_stop=True)
         elif status == CURTAIN_STOP:
-            # Motor stopped (limit reached or stop command) - fix the position
-            if self._direction is not None or self._stop_task is not None:
-                self._fix_position()
-            self._attr_is_opening = False
-            self._attr_is_closing = False
-        else:
-            self._attr_is_opening = (
-                self._device.is_moving and not self._device.is_closed
-            )
-            self._attr_is_closing = (
-                self._device.is_moving and self._device.is_closed
-            )
+            # STOP: the current estimate freezes as the new stationary position
+            # and all movement flags are cleared.
+            self._fix_position()
+        elif self._direction is None:
+            # Unknown status and no tracked movement: nothing is moving.
+            self._set_moving_flags(False, False)
 
-        if self._supports_position and self._direction is None:
-            self._attr_is_closed = self._fixed_position is not None and self._fixed_position <= 0
-        elif not self._supports_position:
+        self._refresh_is_closed()
+
+    def _set_moving_flags(self, opening, closing):
+        """Set the optimistic opening/closing flags."""
+        self._attr_is_opening = bool(opening)
+        self._attr_is_closing = bool(closing)
+
+    def _refresh_is_closed(self):
+        """Keep ``is_closed`` consistent with the pinned position."""
+        if self._supports_position:
+            if self._direction is not None:
+                # While a movement is tracked the state is opening/closing, so
+                # leave is_closed untouched to avoid a transient "closed" flap.
+                return
+            self._attr_is_closed = (
+                self._fixed_position is not None and self._fixed_position <= 0
+            )
+        else:
             self._attr_is_closed = self._device.is_closed
 
     def _start_movement(self, direction):
-        """Record the start of a movement for travel time estimation."""
-        self._fixed_position = self._estimate_position()
-        if self._fixed_position is None:
+        """Record the start of a movement for travel time estimation.
+
+        Returns ``True`` when a movement is now being tracked and ``False`` when
+        the curtain is already at the requested limit - in that case no movement
+        flag may be raised (M-5).
+        """
+        current = self._estimate_position()
+        if current is None:
             # Never track a "no position" start - assume fully closed.
-            self._fixed_position = 0
+            current = 0
+        target = 100 if direction > 0 else 0
+
+        if self._direction is None and abs(target - current) < 1:
+            # A stationary curtain already at the requested limit has nothing to
+            # do: never raise a movement flag for it (M-5).  A reversal while a
+            # movement is already in progress is a real movement even if the
+            # coarse estimate still equals the new target.
+            self._snap_to_limit(target, cancel_stop=True)
+            return False
+
+        self._fixed_position = current
         self._direction = direction
-        self._position_at_start = float(self._fixed_position)
+        self._position_at_start = float(current)
+        self._target_position = target
         self._start_time = time.monotonic()
         # Optimistic flags: the bus may not confirm the movement, but HA should
         # immediately show "opening"/"closing" after the user pressed the button.
-        self._attr_is_opening = direction > 0
-        self._attr_is_closing = direction < 0
+        self._set_moving_flags(direction > 0, direction < 0)
+        return True
 
     def _estimate_position(self):
         """Estimate the current position (0 closed, 100 open) from travel time."""
@@ -224,29 +248,45 @@ class BusproCover(CoverEntity):
         elapsed = time.monotonic() - self._start_time
         delta = self._direction * (elapsed / self._travel_time * 100.0)
         position = self._position_at_start + delta
-        if position <= 0:
-            self._snap_to_limit(0)
-            return 0
-        if position >= 100:
+        # Only snap when travel reaches the limit it is heading for.  Snapping
+        # on the generic ``<=0``/``>=100`` boundary would clear the flags at the
+        # *start* of a movement (e.g. opening from 0 with zero elapsed time).
+        # M-5: reaching a limit must clear every movement flag; the scheduled
+        # stop is deliberately kept so the motor is still told to stop.
+        if self._direction > 0 and position >= 100:
             self._snap_to_limit(100)
             return 100
+        if self._direction < 0 and position <= 0:
+            self._snap_to_limit(0)
+            return 0
         return position
 
-    def _snap_to_limit(self, value):
+    def _snap_to_limit(self, value, cancel_stop=False):
         """Pin the tracked position to a limit and drop the movement baseline.
 
         The bus only reports moving/stopped, so once the travel-time estimate
         reaches (or overshoots) a limit the position must become a fixed
         boundary value. Otherwise a later status snapshot would fight a stale
-        baseline and make the reported position jump.
+        baseline and make the reported position jump.  All movement flags are
+        cleared here - a curtain at 0 or 100 is by definition not moving (M-5).
         """
+        if cancel_stop and self._stop_task is not None:
+            self._stop_task.cancel()
+            self._stop_task = None
         self._fixed_position = value
         self._direction = None
         self._start_time = None
         self._position_at_start = None
+        self._target_position = None
+        self._set_moving_flags(False, False)
 
     def _fix_position(self):
-        """Stop movement tracking and pin the position."""
+        """Stop movement tracking and pin the position at the current estimate.
+
+        Used when an explicit STOP arrives: the estimated position freezes as the
+        new stationary position and every movement flag is cleared (M-5,
+        BUG-C1).
+        """
         if self._stop_task is not None:
             self._stop_task.cancel()
             self._stop_task = None
@@ -256,19 +296,9 @@ class BusproCover(CoverEntity):
         self._direction = None
         self._start_time = None
         self._position_at_start = None
-        # The movement ended: clear the optimistic opening/closing flags so the
-        # cover does not keep reporting "opening"/"closing" until the next bus
-        # status report (BUG-C1).
-        self._attr_is_opening = False
-        self._attr_is_closing = False
-        # Keep is_closed consistent with the final position, mirroring
-        # _sync_from_bus_status().
-        if self._supports_position:
-            self._attr_is_closed = (
-                self._fixed_position is not None and self._fixed_position <= 0
-            )
-        else:
-            self._attr_is_closed = self._device.is_closed
+        self._target_position = None
+        self._set_moving_flags(False, False)
+        self._refresh_is_closed()
 
     def _schedule_stop(self, delay):
         """Schedule a stop command after the given delay."""
@@ -336,16 +366,14 @@ class BusproCover(CoverEntity):
     async def async_open_cover(self, **kwargs):
         """Open the cover."""
         _LOGGER.debug("Opening cover '%s'", self._device.name)
-        if self._supports_position:
-            self._start_movement(1)
+        if self._supports_position and self._start_movement(1):
             self._schedule_stop(self._travel_time)
         await self._device.open()
 
     async def async_close_cover(self, **kwargs):
         """Close the cover."""
         _LOGGER.debug("Closing cover '%s'", self._device.name)
-        if self._supports_position:
-            self._start_movement(-1)
+        if self._supports_position and self._start_movement(-1):
             self._schedule_stop(self._travel_time)
         await self._device.close()
 
@@ -379,11 +407,12 @@ class BusproCover(CoverEntity):
             return
 
         if delta > 0:
-            self._start_movement(1)
+            started = self._start_movement(1)
             await self._device.open()
         else:
-            self._start_movement(-1)
+            started = self._start_movement(-1)
             await self._device.close()
 
-        run_time = abs(delta) / 100.0 * self._travel_time
-        self._schedule_stop(run_time)
+        if started:
+            run_time = abs(delta) / 100.0 * self._travel_time
+            self._schedule_stop(run_time)
