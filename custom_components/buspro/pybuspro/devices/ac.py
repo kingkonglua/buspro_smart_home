@@ -20,9 +20,9 @@ MODE_BYTE_MAP = {
 }
 FAN_BYTE_MAP = {
     AcFanSpeed.AUTO.value: 0,
-    AcFanSpeed.LOW.value: 1,
+    AcFanSpeed.HIGH.value: 1,
     AcFanSpeed.MEDIUM.value: 2,
-    AcFanSpeed.HIGH.value: 3,
+    AcFanSpeed.LOW.value: 3,
 }
 
 _LOGGER = logging.getLogger(__name__)
