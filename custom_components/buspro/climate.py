@@ -177,7 +177,7 @@ async def async_setup_entry(
 
 
 # noinspection PyAbstractClass
-class BusproClimate(ClimateEntity):
+class BusproClimate(BusproEntityMixin, ClimateEntity):
     """Representation of a Buspro floor heating climate device."""
 
     def __init__(self, hass, device, preset_modes, relay_sensor, module=None):
@@ -236,10 +236,12 @@ class BusproClimate(ClimateEntity):
             self._relay_sensor_is_on = device.single_channel_is_on
             self.async_write_ha_state()
 
-        self._device.register_device_updated_cb(after_update_callback)
+        self._buspro_register_device_updated_cb(after_update_callback)
 
         if self._relay_sensor is not None:
-            self._relay_sensor.register_device_updated_cb(after_relay_sensor_update_callback)
+            self._buspro_register_device_updated_cb(
+                after_relay_sensor_update_callback, self._relay_sensor
+            )
 
     @property
     def should_poll(self):
@@ -397,7 +399,7 @@ class BusproClimate(ClimateEntity):
 
 
 # noinspection PyAbstractClass
-class BusproACClimate(ClimateEntity):
+class BusproACClimate(BusproEntityMixin, ClimateEntity):
     """Representation of a Buspro directly connected AC climate device."""
 
     def __init__(self, hass, device, module=None):
@@ -456,7 +458,7 @@ class BusproACClimate(ClimateEntity):
             if self._hass is not None:
                 self.async_write_ha_state()
 
-        self._device.register_device_updated_cb(after_update_callback)
+        self._buspro_register_device_updated_cb(after_update_callback)
 
     @property
     def should_poll(self):
@@ -595,6 +597,20 @@ class BusproPanelACClimate(BusproEntityMixin, ClimateEntity):
     def available(self) -> bool:
         """Available once the panel has reported the slot and the link is up."""
         return bool(self._module is not None and self._module.connected) and self._device.available
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Stop the panel's background polling before detaching callbacks.
+
+        Without this the two ``ensure_future`` loops in
+        ``PanelAirConditioner._start_background_reads`` (status + temperature)
+        keep running forever, holding the panel object and reading the bus
+        after the HA entity is gone.
+        """
+        device = getattr(self, "_device", None)
+        stop = getattr(device, "stop", None)
+        if callable(stop):
+            stop()
+        await super().async_will_remove_from_hass()
 
     @property
     def temperature_unit(self):

@@ -229,6 +229,35 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # services if an entry is re-added after the last one was unloaded.
     _register_services(hass)
 
+    # Re-setup of the same entry without a prior unload must not orphan the
+    # previous module: it would keep its Buspro object and real UDP socket
+    # alive via the EVENT_HOMEASSISTANT_STOP listener registered in start(),
+    # pinning it until HA stops. Stop it before installing the replacement.
+    existing = hass.data[DOMAIN].get(config_entry.entry_id)
+    if existing is not None:
+        # Re-setup without a prior unload: the previous platform entities still
+        # hold the old module (and thus its socket). Tear the old instance down
+        # fully so it can be collected, instead of orphaning it until HA stops.
+        try:
+            await hass.config_entries.async_unload_platforms(
+                config_entry, PLATFORMS
+            )
+        except Exception as err:  # noqa: BLE001 - best effort, never fatal
+            _LOGGER.warning(
+                "Could not unload previous Buspro platforms for entry %s: %s",
+                config_entry.entry_id,
+                err,
+            )
+        try:
+            await existing.stop()
+            _discard_on_unload_callback(config_entry, existing.stop)
+        except Exception as err:  # noqa: BLE001 - best effort, never fatal
+            _LOGGER.warning(
+                "Could not stop previous Buspro module for entry %s: %s",
+                config_entry.entry_id,
+                err,
+            )
+
     buspro_module = BusproModule(hass, host, port)
     buspro_module.entry_id = config_entry.entry_id
 
@@ -276,6 +305,25 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     return True
 
 
+def _discard_on_unload_callback(config_entry, callback) -> None:
+    """Drop a previously registered ``async_on_unload`` callback if present.
+
+    Home Assistant clears a ConfigEntry's on-unload callbacks itself once the
+    unload completes, but we also stop the module explicitly in
+    ``async_unload_entry``. Detaching the matching callback here keeps the
+    entry from retaining a bound method -- and with it the module plus its UDP
+    socket -- after the entry is gone. That matters whenever an entry object is
+    re-set-up/re-unloaded (and for the lifecycle test harness): without it the
+    callback list grows one stopped module per cycle.
+    """
+    for attr in ("_on_unload", "_unload_callbacks"):
+        callbacks = getattr(config_entry, attr, None)
+        if not isinstance(callbacks, list):
+            continue
+        while callback in callbacks:
+            callbacks.remove(callback)
+
+
 async def _async_update_options(hass: HomeAssistant, config_entry: ConfigEntry):
     """Handle options update — reload the integration."""
     await hass.config_entries.async_reload(config_entry.entry_id)
@@ -299,6 +347,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
         if buspro_module:
             await buspro_module.stop()
+            _discard_on_unload_callback(config_entry, buspro_module.stop)
 
         if not hass.data.get(DOMAIN):
             for service in (

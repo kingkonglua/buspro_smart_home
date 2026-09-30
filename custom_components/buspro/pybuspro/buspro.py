@@ -3,12 +3,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import deque
 
 from .helpers.enums import OperateCode
 from .transport.network_interface import NetworkInterface
 # Imported last: the devices package pulls in core.telegram/helpers, so it
 # must load only after helpers has finished initialising (avoids a cycle).
 from .devices.device import FrameFreshnessGuard
+
+# Upper bound on how many distinct foreign source IPs are remembered as
+# "dropped". Keeps the diagnostics set from growing without bound when an L2
+# neighbour cycles through source addresses.
+MAX_DROPPED_SOURCE_IPS = 64
 
 
 class StateUpdater:
@@ -70,8 +76,12 @@ class Buspro:
         # integration's setup path after resolving the configured host.
         self.allowed_source_ips: set[str] = set()
         # Source IPs whose frames have been dropped by the filter above, so
-        # each is reported once and can be surfaced in diagnostics.
+        # each is reported once and can be surfaced in diagnostics. Bounded:
+        # only the most recent MAX_DROPPED_SOURCE_IPS are remembered (see
+        # _dropped_source_ip_order), otherwise an L2 neighbour that cycles
+        # source addresses would grow this set forever.
         self.dropped_source_ips: set[str] = set()
+        self._dropped_source_ip_order: deque[str] = deque()
 
         # The IP this client advertises inside every outbound telegram's
         # 4-byte header (see TelegramHelper.build_send_buffer). Left None the
@@ -166,6 +176,21 @@ class Buspro:
             self.on_connection_lost()
         except Exception as err:  # noqa: BLE001
             self.logger.warning("on_connection_lost callback error: %s", err)
+
+    def note_dropped_source_ip(self, ip: str) -> bool:
+        """Record a dropped foreign source IP, evicting the oldest if full.
+
+        Returns True when this is the first time this IP is seen, so the caller
+        can log it exactly once.
+        """
+        if not ip or ip in self.dropped_source_ips:
+            return False
+        self.dropped_source_ips.add(ip)
+        self._dropped_source_ip_order.append(ip)
+        while len(self._dropped_source_ip_order) > MAX_DROPPED_SOURCE_IPS:
+            oldest = self._dropped_source_ip_order.popleft()
+            self.dropped_source_ips.discard(oldest)
+        return True
 
     async def _stop_network_interface(self) -> None:
         if self.network_interface is not None:

@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 
+from .entity import BusproEntityMixin
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -71,7 +72,7 @@ async def async_setup_entry(
 
 
 # noinspection PyAbstractClass
-class BusproLight(LightEntity):
+class BusproLight(BusproEntityMixin, LightEntity):
     """Representation of a Buspro light."""
 
     def __init__(self, hass, device, dimmable, module=None):
@@ -92,7 +93,7 @@ class BusproLight(LightEntity):
             """Call after device was updated."""
             self.async_write_ha_state()
 
-        self._device.register_device_updated_cb(after_update_callback)
+        self._buspro_register_device_updated_cb(after_update_callback)
 
     @property
     def should_poll(self):

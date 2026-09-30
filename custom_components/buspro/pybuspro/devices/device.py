@@ -70,6 +70,11 @@ class Device(object):
         self._buspro = buspro
         self._name = name
         self.device_updated_cbs = []
+        # Strong references to the telegram callbacks this device registered
+        # with its Buspro client, so device teardown can detach exactly those
+        # (otherwise Buspro._telegram_received_cbs grows without bound and
+        # pins every Device object it holds).
+        self._telegram_received_cbs = []
         # M-7: keep a strong reference so the fire-and-forget update task is
         # not garbage-collected before it runs.
         self._update_task = None
@@ -80,9 +85,29 @@ class Device(object):
 
     def register_telegram_received_cb(self, telegram_received_cb, postfix=None):
         self._buspro.register_telegram_received_device_cb(telegram_received_cb, self._device_address, postfix)
+        entry = (telegram_received_cb, postfix)
+        if entry not in self._telegram_received_cbs:
+            self._telegram_received_cbs.append(entry)
 
     def unregister_telegram_received_cb(self, telegram_received_cb, postfix=None):
         self._buspro.unregister_telegram_received_device_cb(telegram_received_cb, self._device_address, postfix)
+        try:
+            self._telegram_received_cbs.remove((telegram_received_cb, postfix))
+        except ValueError:
+            pass
+
+    def unregister_all_telegram_received_cbs(self):
+        """Detach every telegram callback this device registered on the bus.
+
+        Called on device teardown (entity removal) so the owning Buspro
+        client's ``_telegram_received_cbs`` list stays bounded by the number of
+        live devices instead of every device ever created.
+        """
+        for telegram_received_cb, postfix in list(self._telegram_received_cbs):
+            self._buspro.unregister_telegram_received_device_cb(
+                telegram_received_cb, self._device_address, postfix
+            )
+        self._telegram_received_cbs.clear()
 
     def register_device_updated_cb(self, device_updated_cb):
         """Register device updated callback."""

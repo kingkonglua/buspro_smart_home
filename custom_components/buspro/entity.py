@@ -35,7 +35,24 @@ class BusproEntityMixin:
         identifier = getattr(device, "device_identifier", None)
         if identifier is not None:
             self._attr_unique_id = gateway_scoped_unique_id(module, identifier)
-        device.register_device_updated_cb(self._async_device_updated)
+        self._buspro_register_device_updated_cb(self._async_device_updated)
+
+    def _buspro_register_device_updated_cb(self, cb, device=None):
+        """Register a device-updated callback and remember it for removal.
+
+        The pair is tracked so :meth:`async_will_remove_from_hass` can detach
+        exactly what was attached, even when the callback is a closure the
+        subclass defined locally (light/switch/sensor/climate/cover). Without
+        this the closure stays bound to the Device's ``device_updated_cbs``
+        list, pinning the HA entity and hass forever after removal.
+        """
+        dev = device if device is not None else getattr(self, "_device", None)
+        if dev is None:
+            return
+        if not hasattr(self, "_buspro_device_cbs"):
+            self._buspro_device_cbs = []
+        self._buspro_device_cbs.append((dev, cb))
+        dev.register_device_updated_cb(cb)
 
     async def _async_device_updated(self, device):
         """Write state after the underlying device reported a change."""
@@ -43,11 +60,24 @@ class BusproEntityMixin:
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Detach the device-updated callback."""
-        try:
-            self._device.unregister_device_updated_cb(self._async_device_updated)
-        except ValueError:
-            pass
+        """Detach every callback this entity bound to its pybuspro device."""
+        for dev, cb in getattr(self, "_buspro_device_cbs", None) or []:
+            try:
+                dev.unregister_device_updated_cb(cb)
+            except (ValueError, AttributeError):
+                pass
+        self._buspro_device_cbs = []
+
+        # Device teardown: drop the per-device telegram callbacks too, so the
+        # Buspro._telegram_received_cbs list does not grow without bound.
+        device = getattr(self, "_device", None)
+        if device is not None:
+            unregister_all = getattr(
+                device, "unregister_all_telegram_received_cbs", None
+            )
+            if unregister_all is not None:
+                unregister_all()
+
         await super().async_will_remove_from_hass()
 
     @property

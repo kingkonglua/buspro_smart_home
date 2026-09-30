@@ -29,6 +29,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .entity import BusproEntityMixin
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -125,7 +126,7 @@ async def async_setup_entry(
 
 
 # noinspection PyAbstractClass
-class BusproCover(CoverEntity):
+class BusproCover(BusproEntityMixin, CoverEntity):
     """Representation of a Buspro cover (curtain) device."""
 
     def __init__(self, hass, device, subtype, travel_time, module=None):
@@ -187,7 +188,7 @@ class BusproCover(CoverEntity):
             if self._hass is not None:
                 self.async_write_ha_state()
 
-        self._device.register_device_updated_cb(after_update_callback)
+        self._buspro_register_device_updated_cb(after_update_callback)
 
     def _sync_from_bus_status(self):
         """Sync local movement state with the status reported by the bus.
@@ -348,10 +349,11 @@ class BusproCover(CoverEntity):
         self._stop_task = self._hass.async_create_task(delayed_stop())
 
     async def async_will_remove_from_hass(self):
-        """Cancel any pending delayed-stop task (M-7)."""
+        """Cancel any pending delayed-stop task (M-7) and detach callbacks."""
         if self._stop_task is not None:
             self._stop_task.cancel()
             self._stop_task = None
+        await super().async_will_remove_from_hass()
 
     @property
     def should_poll(self):

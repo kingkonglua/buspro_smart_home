@@ -37,10 +37,19 @@ class NetworkInterface:
         """
         allowed = getattr(self.buspro, "allowed_source_ips", None)
         if allowed and address and address[0] not in allowed:
-            # Warn ONCE per foreign source IP, at WARNING, not debug.
+            # Warn ONCE per foreign source IP, at WARNING, not debug. The set
+            # that backs "once" is bounded by MAX_DROPPED_SOURCE_IPS, so a
+            # neighbour cycling source addresses cannot grow it forever.
             seen = getattr(self.buspro, "dropped_source_ips", None)
+            first_time = False
             if seen is not None and address[0] not in seen:
-                seen.add(address[0])
+                recorder = getattr(self.buspro, "note_dropped_source_ip", None)
+                if recorder is not None:
+                    first_time = recorder(address[0])
+                else:
+                    seen.add(address[0])
+                    first_time = True
+            if first_time:
                 self.buspro.logger.warning(
                     "Ignoring HDL telegrams from %s: it is not this entry's "
                     "gateway (%s). If devices on this bus are reached through "

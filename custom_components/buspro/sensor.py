@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 
+from .entity import BusproEntityMixin
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -73,7 +74,7 @@ async def async_setup_entry(
 
 
 # noinspection PyAbstractClass
-class BusproSensor(SensorEntity):
+class BusproSensor(BusproEntityMixin, SensorEntity):
     """Representation of a Buspro sensor."""
 
     def __init__(self, hass, device, sensor_type, module=None):
@@ -101,7 +102,7 @@ class BusproSensor(SensorEntity):
                 self._received = True
                 self.async_write_ha_state()
 
-        self._device.register_device_updated_cb(after_update_callback)
+        self._buspro_register_device_updated_cb(after_update_callback)
 
     @property
     def should_poll(self):

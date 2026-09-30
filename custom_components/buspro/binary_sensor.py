@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 
+from .entity import BusproEntityMixin
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -97,7 +98,7 @@ async def async_setup_entry(
 
 
 # noinspection PyAbstractClass
-class BusproBinarySensor(BinarySensorEntity):
+class BusproBinarySensor(BusproEntityMixin, BinarySensorEntity):
     """Representation of a Buspro binary sensor."""
 
     def __init__(self, hass, device, sensor_type, device_class, channel=None,
@@ -119,7 +120,7 @@ class BusproBinarySensor(BinarySensorEntity):
             """Call after device was updated."""
             self.async_write_ha_state()
 
-        self._device.register_device_updated_cb(after_update_callback)
+        self._buspro_register_device_updated_cb(after_update_callback)
 
     @property
     def should_poll(self):
