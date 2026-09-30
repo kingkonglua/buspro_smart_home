@@ -11,7 +11,7 @@ For more details, see pybuspro/devices/scene.py.
 
 import logging
 
-from homeassistant.components.scene import SceneEntity
+from homeassistant.components.scene import Scene
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -72,7 +72,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class BusproScene(SceneEntity):
+class BusproScene(Scene):
     """Representation of an HDL Buspro scene."""
 
     def __init__(self, hass, scene, name, unique_key, module=None):

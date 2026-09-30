@@ -3,7 +3,6 @@
   "name": "HDL Buspro",
   "codeowners": [],
   "config_flow": true,
-  "homeassistant": "2024.1.0",
   "dependencies": [
     "network"
   ],
