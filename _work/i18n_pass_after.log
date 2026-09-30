@@ -1,0 +1,23 @@
+== A. json.load all 4 files ==
+  OK   custom_components/buspro/strings.json
+  OK   custom_components/buspro/translations/zh-Hans.json
+  OK   custom_components/buspro/translations/en.json
+  OK   custom_components/buspro/translations/no.json
+== B. top-level key set parity ==
+  OK   custom_components/buspro/translations/zh-Hans.json top keys == ['config', 'options', 'services']
+  OK   custom_components/buspro/translations/en.json top keys == ['config', 'options', 'services']
+  OK   custom_components/buspro/translations/no.json top keys == ['config', 'options', 'services']
+== C. recursive path parity ==
+  OK   custom_components/buspro/translations/zh-Hans.json has every strings.json path
+  OK   custom_components/buspro/translations/zh-Hans.json services paths == strings.json
+  OK   custom_components/buspro/translations/en.json has every strings.json path
+  OK   custom_components/buspro/translations/en.json services paths == strings.json
+  OK   custom_components/buspro/translations/no.json has every strings.json path
+  OK   custom_components/buspro/translations/no.json services paths == strings.json
+== D. config.abort vs async_abort reasons ==
+  OK   config.abort covers ['gateway_unavailable', 'no_devices_found', 'scan_failed']
+== E. config.step covers async_show_form/progress_done steps ==
+  OK   config.step covers ['add_binary_sensor', 'add_button', 'add_climate', 'add_cover', 'add_device', 'add_light', 'add_scene', 'add_sensor', 'add_switch', 'init', 'manual', 'remove_device', 'scan_bus', 'scan_bus_devices', 'user']
+
+RESULT: PASS (all parity assertions satisfied)
+exit=0

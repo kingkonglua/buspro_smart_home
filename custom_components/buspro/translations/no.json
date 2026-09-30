@@ -158,6 +158,134 @@
     }
   },
   "options": {
+    "step": {
+      "init": {
+        "title": "Integrasjonshandlinger",
+        "description": "Velg en handling:",
+        "data": {
+          "action": "Handlingstype"
+        }
+      },
+      "add_device": {
+        "title": "Legg til enhet",
+        "description": "Velg hvilken type enhet som skal legges til.",
+        "data": {
+          "device_type": "Enhetstype"
+        }
+      },
+      "add_light": {
+        "title": "Legg til lys",
+        "description": "Skriv inn adresse og navn for lysenheten.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_switch": {
+        "title": "Legg til bryter",
+        "description": "Skriv inn adresse og navn for bryterenheten.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_binary_sensor": {
+        "title": "Legg til binærsensor",
+        "description": "Skriv inn adresse og type for binærsensoren.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal / bryternummer",
+          "subtype": "Sensortype",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_sensor": {
+        "title": "Legg til sensor",
+        "description": "Skriv inn adresse og type for sensoren.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "subtype": "Sensortype",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_cover": {
+        "title": "Legg til gardin",
+        "description": "Skriv inn adresse, kanal og navn for gardinenheten.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal / gardinnummer",
+          "subtype": "Gardintype",
+          "travel_time": "Kjøretid i sekunder (for posisjonsestimering)",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_button": {
+        "title": "Legg til knapp",
+        "description": "Legg til en momentanknapp (f.eks. én IR-kode for klima-utsenderen). Kanalen er det universelle bryternummeret.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal / bryternummer",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_climate": {
+        "title": "Legg til klima",
+        "description": "Skriv inn adresse og type for klimaanlegget.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "subtype": "Klimatype",
+          "ac_number": "Klimaanlegg / spor-nummer",
+          "channel": "Temperaturkanal (kun ac_panel)",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_scene": {
+        "title": "Legg til scene",
+        "description": "Skriv inn målenhetens adresse og (område, scene)-numrene som skal utløses.",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "area_number": "Områdenummer",
+          "scene_number": "Scenenummer",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "remove_device": {
+        "title": "Fjern enhet",
+        "description": "Velg en enhet som skal fjernes:",
+        "data": {
+          "device": "Enhet som skal fjernes"
+        }
+      },
+      "scan_bus": {
+        "title": "Skann bussen for enheter",
+        "description": "Start skanning av bussen for alle enheter. Etter skanningen vises resultatet for valg og import.",
+        "data": {
+          "scan_duration": "Skannetid (sekunder)"
+        }
+      },
+      "scan_bus_no_devices": {
+        "title": "Ingen enheter funnet",
+        "description": "Busskanningen ble fullført, men fant ingen enheter. Sjekk gateway-konfigurasjonen og bussforbindelsen."
+      },
+      "scan_bus_devices": {
+        "title": "Velg enheter som skal importeres",
+        "description": "Velg enheter som skal importeres. For sensorer, velg undertype (temperatur, lysstyrke eller fuktighet) per enhet.",
+        "data": {
+          "devices": "Enheter som skal importeres",
+          "sensor_subtypes": "Sensorundertype"
+        }
+      }
+    },
     "progress": {
       "bus_scan": {
         "title": "Skanner buss...",
@@ -176,6 +304,58 @@
       "gateway_unavailable": "Gatewayen er utilgjengelig, kan ikke fortsette.",
       "scan_failed": "Skanningen mislyktes. Sjekk nettverksforbindelsen og prøv igjen.",
       "no_devices_found": "Ingen enheter funnet. Sjekk gateway-konfigurasjonen og bussforbindelsen."
+    }
+  },
+  "services": {
+    "activate_scene": {
+      "name": "Aktiver scene",
+      "description": "Aktiver en scene på HDL Buspro-bussen: sender en scenestyrekommando til den angitte enhetsadressen, slik at målenheten utfører det angitte området/scenen.",
+      "fields": {
+        "address": {
+          "name": "Enhetsadresse",
+          "description": "Målenhetens adresse, format [undernett-ID, enhets-ID], f.eks. [1, 42]."
+        },
+        "scene_address": {
+          "name": "Sceneadresse",
+          "description": "Område- og scenenummeret som skal aktiveres, format [områdenummer, scenenummer], f.eks. [1, 1]."
+        }
+      }
+    },
+    "send_message": {
+      "name": "Send melding",
+      "description": "Send en rå HDL Buspro-styremelding med egendefinert operasjonskode og nyttelast, for avansert/manuell enhetsstyring som ikke dekkes av dedikerte tjenester.",
+      "fields": {
+        "address": {
+          "name": "Enhetsadresse",
+          "description": "Målenhetens adresse, format [undernett-ID, enhets-ID], f.eks. [1, 42]."
+        },
+        "operate_code": {
+          "name": "Operasjonskode",
+          "description": "HDL Buspro-operasjonskode, format [høy byte, lav byte], f.eks. [1, 1]."
+        },
+        "payload": {
+          "name": "Nyttelast",
+          "description": "Nyttelastbyttene som skal sendes, f.eks. [1, 100]."
+        }
+      }
+    },
+    "set_universal_switch": {
+      "name": "Sett universell bryter",
+      "description": "Slå den universelle bryterutgangen på eller av: status 1 slår på, 0 slår av.",
+      "fields": {
+        "address": {
+          "name": "Enhetsadresse",
+          "description": "Målenhetens adresse, format [undernett-ID, enhets-ID], f.eks. [1, 42]."
+        },
+        "switch_number": {
+          "name": "Bryternummer",
+          "description": "Nummeret på den universelle bryteren som skal styres (1–255)."
+        },
+        "status": {
+          "name": "Status",
+          "description": "Ønsket tilstand: 1 betyr på, 0 betyr av."
+        }
+      }
     }
   }
 }

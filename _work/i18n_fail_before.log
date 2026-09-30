@@ -1,0 +1,159 @@
+== A. json.load all 4 files ==
+  OK   custom_components/buspro/strings.json
+  OK   custom_components/buspro/translations/zh-Hans.json
+  OK   custom_components/buspro/translations/en.json
+  OK   custom_components/buspro/translations/no.json
+== B. top-level key set parity ==
+  OK   custom_components/buspro/translations/zh-Hans.json top keys == ['config', 'options', 'services']
+  OK   custom_components/buspro/translations/en.json top keys == ['config', 'options', 'services']
+FAIL: B: custom_components/buspro/translations/no.json top keys mismatch; missing=['services'] extra=[]
+== C. recursive path parity ==
+  OK   custom_components/buspro/translations/zh-Hans.json has every strings.json path
+  OK   custom_components/buspro/translations/zh-Hans.json services paths == strings.json
+  OK   custom_components/buspro/translations/en.json has every strings.json path
+  OK   custom_components/buspro/translations/en.json services paths == strings.json
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.data.channel
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.data.subtype
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_binary_sensor.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button.data.channel
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_button.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.data.ac_number
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.data.channel
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.data.subtype
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_climate.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.data.channel
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.data.subtype
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.data.travel_time
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_cover.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_device
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_device.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_device.data.device_type
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_device.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_device.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light.data.channel
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_light.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.data.area_number
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.data.scene_number
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_scene.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor.data.subtype
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_sensor.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch.data.channel
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch.data.device_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch.data.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch.data.subnet_id
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.add_switch.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.init
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.init.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.init.data.action
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.init.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.init.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.remove_device
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.remove_device.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.remove_device.data.device
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.remove_device.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.remove_device.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus.data.scan_duration
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_devices
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_devices.data
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_devices.data.devices
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_devices.data.sensor_subtypes
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_devices.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_devices.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_no_devices
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_no_devices.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: options.step.scan_bus_no_devices.title
+FAIL: C: custom_components/buspro/translations/no.json missing path: services
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.fields
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.fields.address
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.fields.address.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.fields.address.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.fields.scene_address
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.fields.scene_address.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.fields.scene_address.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.activate_scene.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.address
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.address.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.address.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.operate_code
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.operate_code.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.operate_code.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.payload
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.payload.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.fields.payload.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.send_message.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.address
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.address.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.address.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.status
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.status.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.status.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.switch_number
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.switch_number.description
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.fields.switch_number.name
+FAIL: C: custom_components/buspro/translations/no.json missing path: services.set_universal_switch.name
+FAIL: C: custom_components/buspro/translations/no.json services path mismatch; missing=['services', 'services.activate_scene', 'services.activate_scene.description', 'services.activate_scene.fields', 'services.activate_scene.fields.address', 'services.activate_scene.fields.address.description', 'services.activate_scene.fields.address.name', 'services.activate_scene.fields.scene_address', 'services.activate_scene.fields.scene_address.description', 'services.activate_scene.fields.scene_address.name', 'services.activate_scene.name', 'services.send_message', 'services.send_message.description', 'services.send_message.fields', 'services.send_message.fields.address', 'services.send_message.fields.address.description', 'services.send_message.fields.address.name', 'services.send_message.fields.operate_code', 'services.send_message.fields.operate_code.description', 'services.send_message.fields.operate_code.name', 'services.send_message.fields.payload', 'services.send_message.fields.payload.description', 'services.send_message.fields.payload.name', 'services.send_message.name', 'services.set_universal_switch', 'services.set_universal_switch.description', 'services.set_universal_switch.fields', 'services.set_universal_switch.fields.address', 'services.set_universal_switch.fields.address.description', 'services.set_universal_switch.fields.address.name', 'services.set_universal_switch.fields.status', 'services.set_universal_switch.fields.status.description', 'services.set_universal_switch.fields.status.name', 'services.set_universal_switch.fields.switch_number', 'services.set_universal_switch.fields.switch_number.description', 'services.set_universal_switch.fields.switch_number.name', 'services.set_universal_switch.name'] extra=[]
+== D. config.abort vs async_abort reasons ==
+  OK   config.abort covers ['gateway_unavailable', 'no_devices_found', 'scan_failed']
+== E. config.step covers async_show_form/progress_done steps ==
+  OK   config.step covers ['add_binary_sensor', 'add_button', 'add_climate', 'add_cover', 'add_device', 'add_light', 'add_scene', 'add_sensor', 'add_switch', 'init', 'manual', 'remove_device', 'scan_bus', 'scan_bus_devices', 'user']
+
+RESULT: FAIL (139 failures)
+exit=1
