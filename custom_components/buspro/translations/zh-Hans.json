@@ -349,7 +349,7 @@
         },
         "switch_number": {
           "name": "开关编号",
-          "description": "要控制的万能开关编号（1-8）。"
+          "description": "要控制的万能开关编号（1-255）。"
         },
         "status": {
           "name": "状态",

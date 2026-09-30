@@ -349,7 +349,7 @@
         },
         "switch_number": {
           "name": "Switch number",
-          "description": "Universal switch number to control (1-8)."
+          "description": "Universal switch number to control (1-255)."
         },
         "status": {
           "name": "Status",
