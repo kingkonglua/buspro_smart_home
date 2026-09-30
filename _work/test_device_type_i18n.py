@@ -107,8 +107,9 @@ def source_without_comments(src):
 
 
 def import_options_flow():
-    if str(REPO) not in sys.path:
-        sys.path.insert(0, str(REPO))
+    for path in (str(HERE / "ha_stub"), str(HERE / "pylibs"), str(REPO)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
     from custom_components.buspro.config_flow import BusproOptionsFlow
 
     return BusproOptionsFlow
