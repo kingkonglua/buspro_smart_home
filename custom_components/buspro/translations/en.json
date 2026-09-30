@@ -141,7 +141,11 @@
       },
       "scan_bus_devices": {
         "title": "Select Devices to Import",
-        "description": "Select devices you want to add. For sensors, choose the subtype (temperature or illuminance) per device, then submit."
+        "description": "Select devices you want to add. For sensors, choose the subtype (temperature or illuminance) per device, then submit.",
+        "data": {
+          "devices": "Devices to import",
+          "sensor_subtypes": "Sensor subtype"
+        }
       }
     },
     "progress": {

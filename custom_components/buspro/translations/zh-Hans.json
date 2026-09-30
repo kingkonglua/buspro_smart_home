@@ -141,7 +141,11 @@
       },
       "scan_bus_devices": {
         "title": "选择要导入的设备",
-        "description": "勾选希望添加的设备。传感器可单独选择子类型（温度或亮度），然后提交。"
+        "description": "勾选希望添加的设备。传感器可单独选择子类型（温度或亮度），然后提交。",
+        "data": {
+          "devices": "要导入的设备",
+          "sensor_subtypes": "传感器子类型"
+        }
       }
     },
     "progress": {
