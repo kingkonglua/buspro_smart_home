@@ -1,4 +1,4 @@
-﻿from .control import _SingleChannelControl
+﻿from .control import _ReadStatusOfChannels, _SingleChannelControl
 from .device import Device
 from ..helpers.enums import *
 from ..helpers.generics import Generics
@@ -50,7 +50,16 @@ class Light(Device):
         await self._set(intensity, running_time_seconds)
 
     async def read_status(self):
-        raise NotImplementedError
+        """Request a fresh read of this channel's current status.
+
+        A single on-demand 0xE0 ReadStatusOfChannels request -- the same
+        control ``Device._call_read_current_status_of_channels()`` uses, but
+        awaited directly so the post-reconnect resync can await it and catch
+        failures (no fire-and-forget task, no startup delay).
+        """
+        reader = _ReadStatusOfChannels(self._buspro)
+        reader.subnet_id, reader.device_id = self._device_address
+        await reader.send()
 
     @property
     def device_identifier(self):

@@ -6,6 +6,7 @@ https://home-assistant.io/...
 """
 
 import asyncio
+import inspect
 import logging
 import socket
 
@@ -585,7 +586,59 @@ class BusproModule:
             _LOGGER.info(
                 "Reconnected to Buspro gateway %s:%s", self.host, self.port
             )
+            # BUG-1: availability flips back to True with ``connected``, but
+            # every Device still holds the state it had when the link died.
+            # Re-read them once so entities show reality instead of the
+            # pre-outage value. Never let a failed read abort the reconnect.
+            try:
+                await self._async_resync_devices()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Post-reconnect device resync failed: %s", err)
             return
+
+    async def _async_resync_devices(self):
+        """Re-read every device registered on the gateway after a reconnect.
+
+        Walks the per-device telegram callbacks the devices registered with
+        the bus, deduplicates them and asks each for one fresh status read.
+        Deliberately a one-shot pass per reconnect -- it creates no timer,
+        loop or thread, so nothing survives to leak after setup/unload.
+        """
+        if self.hdl is None:
+            return
+        seen = set()
+        for entry in list(getattr(self.hdl, "_telegram_received_cbs", [])):
+            callback = entry.get("callback") if isinstance(entry, dict) else None
+            # Every device registers a bound ``_telegram_received_cb``; its
+            # ``__self__`` is the Device instance that owns the state.
+            device = getattr(callback, "__self__", None)
+            if device is None or id(device) in seen:
+                continue
+            seen.add(id(device))
+            try:
+                await self._async_resync_device(device)
+            except Exception as err:  # noqa: BLE001 - never abort a reconnect
+                _LOGGER.debug(
+                    "Post-reconnect resync failed for device %s: %s",
+                    getattr(device, "device_identifier", device),
+                    err,
+                )
+
+    @staticmethod
+    async def _async_resync_device(device):
+        """Ask one device for a fresh status read, through its own API."""
+        read_status = getattr(device, "read_status", None)
+        if callable(read_status):
+            result = read_status()
+            if inspect.isawaitable(result):
+                await result
+            return
+        # Sensors / floor-heating climate have no read_status, but still
+        # expose the shared base read mechanism; reuse it rather than
+        # inventing a second polling path.
+        resync = getattr(device, "_call_read_current_status_of_channels", None)
+        if callable(resync):
+            resync()
 
     async def start(self):
         """Start Buspro object. Connect to tunneling device."""
