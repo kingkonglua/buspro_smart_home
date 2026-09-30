@@ -458,7 +458,8 @@ class BusproACClimate(ClimateEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        return self._hass.data[DATA_BUSPRO].connected
+        module = self._hass.data[DATA_BUSPRO]
+        return bool(module.connected) and self._device.available
 
     @property
     def unique_id(self):

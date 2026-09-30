@@ -44,6 +44,7 @@ class AC(Device):
         self._ac_number = ac_number
 
         self._status = None                 # 1 on / 0 off
+        self._available = False             # True once a real status frame seen
         self._mode = None                   # 0 cool, 1 heat, 2 fan, 3 auto, 4 dry
         self._fan_speed = None              # 0 auto, 1 high, 2 medium, 3 low
         self._current_temperature = None    # temperature measured by the unit / DLP
@@ -75,6 +76,13 @@ class AC(Device):
         if self._ac_number is not None and ac_number != self._ac_number:
             return
 
+        # M-6: an all-0xFF status region is HDL's "no AC unit wired to this
+        # slot" sentinel. Treating it as real state would make the entity look
+        # available with fake values and replay 0xFF onto the bus on control.
+        if len(payload) >= 13 and all(b == 255 for b in payload[8:13]):
+            self._available = False
+            return
+
         self._temperature_type = payload[1]
         self._current_temperature = payload[2]
         self._cooling_temperature = payload[3]
@@ -87,6 +95,7 @@ class AC(Device):
         self._fan_speed = payload[10]
         self._current_mode_temperature = payload[11]
         self._sweep = payload[12]
+        self._available = True
 
     async def read_status(self):
         rasc = _ReadAcStatus(self._buspro)
@@ -193,7 +202,13 @@ class AC(Device):
         cc.subnet_id, cc.device_id = self._device_address
         cc.ac_number = self._ac_number if self._ac_number is not None else 1
         cc.temperature_type = self._temperature_type
-        cc.current_temperature = self._current_temperature if self._current_temperature is not None else DEFAULT_TEMPERATURE
+        # M-6: do not fabricate a plausible room reading when it was never
+        # observed; send 0 instead of the old DEFAULT_TEMPERATURE (22).
+        cc.current_temperature = (
+            self._current_temperature
+            if self._current_temperature is not None
+            else 0
+        )
         cc.cooling_temperature = cooling
         cc.heating_temperature = heating
         cc.auto_temperature = auto
@@ -237,6 +252,11 @@ class AC(Device):
     @property
     def is_on(self):
         return self._status == 1
+
+    @property
+    def available(self):
+        """True once a real (non-sentinel) status frame has been observed."""
+        return self._available
 
     @property
     def mode(self):
