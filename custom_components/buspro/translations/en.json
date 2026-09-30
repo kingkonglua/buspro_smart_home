@@ -8,6 +8,14 @@
           "host": "Host IP address",
           "port": "Port number"
         }
+      },
+      "manual": {
+        "title": "Enter Gateway Address Manually",
+        "description": "Enter the HDL Buspro gateway IP address and port.",
+        "data": {
+          "host": "IP address",
+          "port": "Port number"
+        }
       }
     },
     "abort": {
@@ -86,7 +94,37 @@
         "data": {
           "device": "Device"
         }
+      },
+      "scan_bus": {
+        "title": "Scan Bus Devices",
+        "description": "Start scanning the bus for all devices. After scanning, the results will be shown for import.",
+        "data": {
+          "scan_duration": "Scan duration (seconds)"
+        }
+      },
+      "scan_bus_devices": {
+        "title": "Select Devices to Import",
+        "description": "Select devices you want to add. For sensors, choose the subtype (temperature or illuminance) per device, then submit."
       }
+    },
+    "progress": {
+      "bus_scan": {
+        "title": "Scanning bus...",
+        "description": "Sending probe requests to the bus and collecting device responses, please wait."
+      },
+      "bus_scan_confirming": {
+        "title": "Confirming devices...",
+        "description": "Verifying scanned device data, please wait."
+      }
+    },
+    "abort": {
+      "gateway_unavailable": "Gateway unavailable, cannot continue.",
+      "scan_failed": "Scan failed, check network connection and retry.",
+      "no_devices_found": "No devices found, check gateway configuration and bus connection."
+    },
+    "error": {
+      "already_exists": "Device {device_key} already exists and cannot be added again.",
+      "gateway_unavailable": "Gateway unavailable, cannot continue."
     }
   }
 }

@@ -46,12 +46,15 @@ class Buspro:
         self.gateway_address_send_receive = gateway_address_send_receive
 
     def __del__(self):
-        if self.started:
-            try:
-                task = self.loop.create_task(self.stop())
-                self.loop.run_until_complete(task)
-            except RuntimeError as exp:
-                self.logger.warning("Could not close loop, reason: {}".format(exp))
+        # Do NOT run coroutines from __del__: calling run_until_complete()
+        # here can conflict with an already running/closed event loop and
+        # raise "This event loop is already running" or similar errors.
+        # Just flag the instance as stopped; teardown is best-effort and
+        # must be driven via the explicit async start()/stop() API.
+        try:
+            self.started = False
+        except Exception:
+            pass
 
     # noinspection PyUnusedLocal
     async def start(self, state_updater=False):  # , daemon_mode=False):

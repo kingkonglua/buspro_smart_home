@@ -82,6 +82,10 @@ class AcFanSpeed(Enum):
 class OperateCode(Enum):
     NotSet = b'\x00'
 
+    # 通用设备信息探测（HDL 标准发现 poke，响应 0x000F）
+    ReadDeviceInfo = b'\x00\x0E'
+    ReadDeviceInfoResponse = b'\x00\x0F'
+
     SingleChannelControl = b'\x00\x31'
     SingleChannelControlResponse = b'\x00\x32'
     ReadStatusOfChannels = b'\x00\x33'
@@ -176,6 +180,17 @@ class OperateCode(Enum):
     RESPONSE_QUERY_12in1_FROM_SETUP_TOOL_8 = b'\x16\x6F'
     QUERY_12in1_FROM_SETUP_TOOL_9 = b'\x16\xA9'
     RESPONSE_QUERY_12in1_FROM_SETUP_TOOL_9 = b'\x16\xAA'
+
+    # marsh4200 补充的操作码（已有的跳过不重复添加：
+    # ReadAcStatus/ReadAcStatusResponse/TIME_IF_FROM_LOGIC_OR_SECURITY/
+    # INFO_IF_FROM_RELE_10V 已在上方定义）
+    MakeZones = b'\x00\x06'
+    IsDeviceOnline = b'\xF0\x65'
+    IsAddressConflict = b'\x02\x84'
+    ModifyAddress = b'\xE5\xF7'
+    DetectAddress = b'\xE5\xF5'
+    DetectAddressResponse = b'\xE5\xF6'
+    ModifyChannelLoadType = b'\xF0\x14'
 
     '''
     public enum OperationCode

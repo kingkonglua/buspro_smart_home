@@ -69,7 +69,7 @@ PLATFORMS = ["light", "switch", "binary_sensor", "sensor", "climate", "cover", "
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up the Buspro component from a config entry."""
     host = config_entry.data.get(CONF_HOST, "")
-    port = config_entry.data.get(CONF_PORT, 1)
+    port = config_entry.data.get(CONF_PORT, 6000)  # BUGFIX: default port was 1, should be 6000
 
     buspro_module = BusproModule(hass, host, port)
     await buspro_module.start()

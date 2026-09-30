@@ -7,7 +7,7 @@ https://home-assistant.io/components/...
 
 import logging
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
 from homeassistant.core import callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -137,6 +137,9 @@ class BusproBinarySensor(BinarySensorEntity):
     @property
     def device_class(self):
         """Return the class of this sensor."""
+        # BUGFIX: motion sensors must use MOTION device_class for correct icons/units
+        if self._sensor_type == CONF_MOTION:
+            return BinarySensorDeviceClass.MOTION
         return self._device_class
 
     @property

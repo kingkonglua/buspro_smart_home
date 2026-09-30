@@ -9,6 +9,22 @@ from ..helpers.enums import *
 DEFAULT_MODE_AND_FAN = 48
 DEFAULT_TEMPERATURE = 22
 
+# BUGFIX: build mode_and_fan dynamically instead of hardcoding 0x30.
+# Mapping of HDL AC mode / fan values to their nibble inside the mode_and_fan byte.
+MODE_BYTE_MAP = {
+    AcMode.COOL.value: 0,
+    AcMode.HEAT.value: 1,
+    AcMode.FAN.value: 2,
+    AcMode.AUTO.value: 3,
+    AcMode.DRY.value: 4,
+}
+FAN_BYTE_MAP = {
+    AcFanSpeed.AUTO.value: 0,
+    AcFanSpeed.LOW.value: 1,
+    AcFanSpeed.MEDIUM.value: 2,
+    AcFanSpeed.HIGH.value: 3,
+}
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -95,19 +111,17 @@ class AC(Device):
 
     async def control(self, status=None, mode=None, fan_speed=None, temperature=None, sweep=None):
         """Send a full status to the AC module, merging the given partial update."""
-        # Only apply an explicit power state change. Falling back to a hard
-        # coded 0 when the status is unknown would send a full "OFF" frame
-        # and switch the unit off on any unrelated control request.
+        # Apply the explicit power state when given; otherwise reuse the last
+        # known state. If even that is unknown, we still send the command
+        # (defaulting to ON) instead of silently dropping it.
         new_status = status
         if new_status is None:
             new_status = self._status
         if new_status is None:
-            _LOGGER.warning(
-                "AC '%s' power state unknown and no explicit status was requested; "
-                "skipping control to avoid turning the unit off",
-                self._name,
-            )
-            return
+            # BUGFIX: do not silently drop the command when power state is
+            # unknown. HA upper layer already provides idempotency; default to
+            # ON so partial updates (set_mode/set_temperature) are still sent.
+            new_status = 1
         new_mode = self._mode if mode is None else mode
         new_fan_speed = self._fan_speed if fan_speed is None else fan_speed
         new_sweep = self._sweep if sweep is None else sweep
@@ -154,13 +168,22 @@ class AC(Device):
         )
         current_mode_temperature = self._current_mode_temperature
         if current_mode_temperature is None or mode_changed:
-            current_mode_temperature = {
-                AcMode.COOL.value: cooling,
-                AcMode.HEAT.value: heating,
-                AcMode.AUTO.value: auto,
-                AcMode.DRY.value: dry,
-                AcMode.FAN.value: 0,
-            }.get(new_mode, DEFAULT_TEMPERATURE)
+            if new_mode == AcMode.FAN.value:
+                # FAN mode has no target temperature; keep the previously
+                # known value instead of sending 0 (which the AC would
+                # interpret as an actual setpoint).
+                current_mode_temperature = (
+                    self._current_mode_temperature
+                    if self._current_mode_temperature is not None
+                    else DEFAULT_TEMPERATURE
+                )
+            else:
+                current_mode_temperature = {
+                    AcMode.COOL.value: cooling,
+                    AcMode.HEAT.value: heating,
+                    AcMode.AUTO.value: auto,
+                    AcMode.DRY.value: dry,
+                }.get(new_mode, DEFAULT_TEMPERATURE)
 
         cc = _ControlAcStatus(self._buspro)
         cc.subnet_id, cc.device_id = self._device_address
@@ -171,7 +194,12 @@ class AC(Device):
         cc.heating_temperature = heating
         cc.auto_temperature = auto
         cc.dry_temperature = dry
-        cc.mode_and_fan = self._mode_and_fan
+        # BUGFIX: derive mode_and_fan from the resolved mode/fan, not the
+        # hardcoded DEFAULT_MODE_AND_FAN (0x30) that was used before.
+        mode_byte = MODE_BYTE_MAP.get(new_mode, 0)
+        fan_byte = FAN_BYTE_MAP.get(new_fan_speed, 0)
+        mode_and_fan = (mode_byte << 4) | fan_byte
+        cc.mode_and_fan = mode_and_fan
         cc.status = new_status
         cc.mode = new_mode
         cc.fan_speed = new_fan_speed
@@ -183,6 +211,7 @@ class AC(Device):
         self._mode = new_mode
         self._fan_speed = new_fan_speed
         self._sweep = new_sweep
+        self._mode_and_fan = mode_and_fan
         self._cooling_temperature = cooling
         self._heating_temperature = heating
         self._auto_temperature = auto

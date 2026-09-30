@@ -48,9 +48,9 @@ COVER_SUBTYPE_CURTAIN_MODULE = "curtain_module"
 COVER_SUBTYPE_BUS_MOTOR = "bus_motor"
 
 # CurtainAction values as reported by the bus
-CURTAIN_STOP = 0
-CURTAIN_OPEN = 1
-CURTAIN_CLOSE = 2
+CURTAIN_STOP = 0   # stopped / parked in a middle position
+CURTAIN_OPEN = 1   # curtain physically open (at open limit)
+CURTAIN_CLOSE = 2  # curtain physically closed (at closed limit)
 
 
 async def async_setup_entry(
@@ -161,6 +161,10 @@ class BusproCover(CoverEntity):
         """Sync local movement state with the status reported by the bus."""
         status = self._device.status
 
+        # BUGFIX: clarify the bus status semantics used below.
+        #   status == 2 (CURTAIN_CLOSE): curtain physically closed (at closed limit)
+        #   status == 1 (CURTAIN_OPEN) : curtain physically open (at open limit)
+        #   status == 0 (CURTAIN_STOP) : stopped / parked in a middle position
         if status == CURTAIN_STOP:
             # Motor stopped (limit reached or stop command) - fix the position
             if self._direction is not None or self._stop_task is not None:
@@ -172,7 +176,7 @@ class BusproCover(CoverEntity):
             # Bus reports the curtain is opening (e.g. controlled elsewhere)
             self._start_movement(1)
         elif status == CURTAIN_CLOSE and self._direction is None:
-            # Bus reports the curtain is closing
+            # Bus reports the curtain is closing (status==2 => physically closed)
             self._start_movement(-1)
 
         self._attr_is_opening = self._device.is_moving and not self._device.is_closed

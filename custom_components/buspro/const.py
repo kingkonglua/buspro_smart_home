@@ -3,6 +3,20 @@ DOMAIN = "buspro"
 # Gateway configuration
 CONF_HOST = "host"
 CONF_PORT = "port"
+DEFAULT_PORT = 6000
+
+# Gateway auto-discovery (config flow step "user")
+CONF_GATEWAY_CHOICE = "gateway_choice"
+CHOICE_MANUAL = "manual"
+CHOICE_RESCAN = "rescan"
+GATEWAY_DISCOVERY_TIMEOUT = 5.0
+
+# Bus scan (options flow)
+CONF_SCAN_DURATION = "scan_duration"
+DEFAULT_SCAN_DURATION = 15
+MIN_SCAN_DURATION = 5
+MAX_SCAN_DURATION = 60
+SCAN_DEVICES_SELECTION = "devices"
 
 # Device configuration keys
 CONF_DEVICES = "devices"
@@ -60,3 +74,9 @@ CLIMATE_SUBTYPES = [
     "floor_heating",
     "ac",
 ]
+
+# Scan classification types (discovery.py). These are *not* platform device
+# types: "ac" imports as climate/subtype=ac, "curtain" imports as
+# cover/subtype=curtain_module.
+DEVICE_TYPE_AC = "ac"
+DEVICE_TYPE_CURTAIN = "curtain"

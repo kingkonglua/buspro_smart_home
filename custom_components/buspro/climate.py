@@ -248,9 +248,10 @@ class BusproClimate(ClimateEntity):
     @property
     def preset_mode(self) -> Optional[str]:
         """Return the current preset mode."""
+        # BUGFIX: use .get() to avoid KeyError when _mode is None on first load
         if self._mode not in list(HDL_TO_HA_PRESET):
             return PRESET_NONE
-        return HDL_TO_HA_PRESET[self._mode]
+        return HDL_TO_HA_PRESET.get(self._mode, PRESET_NONE)
 
     @property
     def preset_modes(self) -> Optional[List[str]]:
@@ -284,7 +285,8 @@ class BusproClimate(ClimateEntity):
         """Return current action ie. heating, idle, off."""
         if self._is_on:
             if self._relay_sensor_is_on is None:
-                return HVACAction.Heat
+                # BUGFIX: HVACAction has no HEAT member; floor heating action is HEATING
+                return HVACAction.HEATING
             else:
                 if self._relay_sensor_is_on:
                     return HVACAction.HEATING
@@ -339,7 +341,8 @@ class BusproClimate(ClimateEntity):
             return
 
         climate_control = ControlFloorHeatingStatus()
-        preset = HDL_TO_HA_PRESET[self._mode]
+        # BUGFIX: use .get() to avoid KeyError when _mode is None on first load
+        preset = HDL_TO_HA_PRESET.get(self._mode, PRESET_NONE)
         target_temperature = int(temperature)
 
         _LOGGER.debug(
@@ -507,9 +510,10 @@ class BusproACClimate(ClimateEntity):
             if ac_mode is None:
                 _LOGGER.error("Unrecognized hvac mode: %s", hvac_mode)
                 return
+            # set_mode() sends a full control command that already sets
+            # status=ON (control() defaults new_status to 1), so an extra
+            # turn_on() would be a redundant second command. Rely on set_mode.
             await self._device.set_mode(ac_mode)
-            if not self._device.is_on:
-                await self._device.turn_on()
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""

@@ -1,17 +1,19 @@
 {
   "domain": "buspro",
   "name": "HDL Buspro",
+  "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/kingkonglua/buspro_smart_home",
-  "issue_tracker": "https://github.com/kingkonglua/buspro_smart_home/issues",
-  "codeowners": [
-    "@kingkonglua"
+  "dependencies": [
+    "network"
   ],
-  "dependencies": [],
+  "documentation": "https://github.com/example/hdl-buspro-ha",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/example/hdl-buspro-ha/issues",
+  "loggers": [
+    "buspro.log",
+    "buspro.telegram"
+  ],
   "requirements": [],
-  "ssdp": [],
-  "zeroconf": [],
-  "homekit": {},
-  "version": "2.0.1",
-  "iot_class": "local_push"
+  "version": "1.1.0"
 }

@@ -111,7 +111,9 @@ class TelegramHelper:
         #    send_buf.append(0)
         #    # send_buf.append(b'\x00\x00')
 
-        operate_code_hex = telegram.operate_code.value
+        # 兼容枚举成员和原始 bytes（扫描/发现代码可能直接传 b'\x00\x0E'）
+        _oc = telegram.operate_code
+        operate_code_hex = _oc.value if hasattr(_oc, "value") else bytes(_oc)
         send_buf.append(operate_code_hex[0])
         send_buf.append(operate_code_hex[1])
 

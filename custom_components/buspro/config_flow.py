@@ -2,14 +2,26 @@
 Config flow for HDL Buspro integration.
 
 Handles initial gateway setup (host/port) and device management via OptionsFlow.
+
+Two convenience entry points are layered on top of the classic manual flow
+(both are optional -- manual IP entry keeps working exactly as before):
+
+- Gateway auto-discovery: on first launch the integration probes UDP/6000
+  broadcast for HDL gateways and offers a dropdown; picking one prefills the
+  existing host/port form.
+- Bus scan: from the options menu, a broadcast scan discovers every device on
+  the bus (relays, dimmers, sensors, floor heating, dry contacts, curtains and
+  AC units), classified automatically, for one-click import.
 """
 
+import asyncio
 import logging
 
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
 from .const import (
     DOMAIN,
@@ -35,10 +47,19 @@ from .const import (
     SENSOR_SUBTYPES,
     COVER_SUBTYPES,
     CLIMATE_SUBTYPES,
+    DEFAULT_PORT,
+    CONF_GATEWAY_CHOICE,
+    CHOICE_MANUAL,
+    CHOICE_RESCAN,
+    GATEWAY_DISCOVERY_TIMEOUT,
+    CONF_SCAN_DURATION,
+    DEFAULT_SCAN_DURATION,
+    MIN_SCAN_DURATION,
+    MAX_SCAN_DURATION,
+    SCAN_DEVICES_SELECTION,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
 
 
 class BusproConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -46,8 +67,91 @@ class BusproConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self):
+        """Initialize the config flow."""
+        self._discovered_gateways: dict[str, dict] | None = None
+        self._prefill: dict = {}
+
+    async def _async_run_gateway_discovery(self) -> dict[str, dict]:
+        """Probe UDP/6000 for HDL gateways on the local network."""
+        # Imported lazily so a problem in the discovery helper can never break
+        # the import of the whole config flow module.
+        from .gateway_discovery import async_discover_gateways
+
+        try:
+            self._discovered_gateways = await async_discover_gateways(
+                self.hass, timeout=GATEWAY_DISCOVERY_TIMEOUT
+            )
+        except Exception as err:  # noqa: BLE001 - discovery must never block setup
+            _LOGGER.warning("HDL gateway auto-detection failed: %s", err)
+            self._discovered_gateways = {}
+        return self._discovered_gateways
+
     async def async_step_user(self, user_input=None):
-        """Handle the initial gateway setup step."""
+        """Handle the initial step.
+
+        First invocation runs a quick gateway discovery and shows a dropdown of
+        everything that answered. The user can pick a discovered IP (which
+        prefills the classic form below), rescan, or choose manual entry.
+        If nothing is found, we fall straight through to the classic form --
+        the hand-filled-IP path stays exactly as it was.
+        """
+        if user_input is not None:
+            choice = user_input.get(CONF_GATEWAY_CHOICE)
+            if choice == CHOICE_MANUAL:
+                return await self.async_step_manual()
+            if choice == CHOICE_RESCAN:
+                self._discovered_gateways = None
+                return await self.async_step_user()
+            # A discovered gateway IP: prefill the manual form with it.
+            info = (self._discovered_gateways or {}).get(choice, {})
+            self._prefill = {
+                CONF_HOST: choice,
+                CONF_PORT: int(info.get("port", DEFAULT_PORT)),
+            }
+            return await self.async_step_manual()
+
+        if self._discovered_gateways is None:
+            await self._async_run_gateway_discovery()
+
+        gateways = self._discovered_gateways or {}
+        if not gateways:
+            # Nothing answered the broadcast probe (different L2 segment,
+            # blocked broadcasts, ...) -- fall back to the manual form.
+            return await self.async_step_manual()
+
+        options = [
+            selector.SelectOptionDict(
+                value=ip, label=info.get("label", ip)
+            )
+            for ip, info in gateways.items()
+        ]
+        options.append(
+            selector.SelectOptionDict(value=CHOICE_RESCAN, label="Scan again")
+        )
+        options.append(
+            selector.SelectOptionDict(
+                value=CHOICE_MANUAL, label="Enter address manually"
+            )
+        )
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema({
+                vol.Required(
+                    CONF_GATEWAY_CHOICE,
+                    default=next(iter(gateways)),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+            }),
+            description_placeholders={"count": str(len(gateways))},
+        )
+
+    async def async_step_manual(self, user_input=None):
+        """Handle the classic gateway setup form (hand-filled IP)."""
         errors = {}
 
         if user_input is not None:
@@ -61,12 +165,23 @@ class BusproConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=user_input,
             )
 
+        schema = {
+            vol.Required(CONF_HOST): str,
+            vol.Required(CONF_PORT): int,
+        }
+        if self._prefill:
+            schema = {
+                vol.Required(
+                    CONF_HOST, default=self._prefill.get(CONF_HOST, vol.UNDEFINED)
+                ): str,
+                vol.Required(
+                    CONF_PORT, default=self._prefill.get(CONF_PORT, DEFAULT_PORT)
+                ): int,
+            }
+
         return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema({
-                vol.Required(CONF_HOST): str,
-                vol.Required(CONF_PORT): int,
-            }),
+            step_id="manual",
+            data_schema=vol.Schema(schema),
             errors=errors,
         )
 
@@ -83,6 +198,10 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
     def __init__(self):
         """Initialize options flow."""
         self.devices = None
+        self._scan_results = None
+        self._scan_task = None
+        self._scan_started = 0.0
+        self._scan_duration = DEFAULT_SCAN_DURATION
 
     def _ensure_devices_loaded(self):
         """Lazy load devices from config entry options."""
@@ -104,14 +223,24 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
         return f"{name} ({device_type}, {addr})"
 
+    def _live_hdl(self):
+        """Return the connected Buspro client for this entry, or None."""
+        module = self.hass.data.get(DOMAIN)
+        hdl = getattr(module, "hdl", None)
+        if hdl is None or getattr(hdl, "network_interface", None) is None:
+            return None
+        return hdl
+
     async def async_step_init(self, user_input=None):
-        """Show the main menu: add / remove / done."""
+        """Show the main menu: add / scan / remove / done."""
         self._ensure_devices_loaded()
 
         if user_input is not None:
             action = user_input.get("action")
             if action == "add":
                 return await self.async_step_add_device()
+            elif action == "scan_bus":
+                return await self.async_step_scan_bus()
             elif action == "remove":
                 return await self.async_step_remove_device()
             elif action == "done":
@@ -134,6 +263,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Required("action"): vol.In({
                     "add": "Add device",
+                    "scan_bus": "扫描总线发现设备",
                     "remove": "Remove device",
                     "done": "Done",
                 }),
@@ -141,6 +271,349 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={"devices": summary},
         )
 
+    # ----- bus scan: discover devices automatically ------------------------
+    async def async_step_scan_bus(self, user_input=None):
+        """Scan the bus for devices, with a live countdown while it runs."""
+        from .discovery import SCAN_TIMEOUT_MARGIN, BusScanner
+
+        if self._scan_task is None and user_input is not None:
+            hdl = self._live_hdl()
+            if hdl is None:
+                return self.async_abort(reason="gateway_unavailable")
+
+            self._scan_duration = int(
+                user_input.get(CONF_SCAN_DURATION, DEFAULT_SCAN_DURATION)
+            )
+
+            scanner = BusScanner(hdl)
+            self._scan_started = self.hass.loop.time()
+            # The real scan runs independently in the background; the flow
+            # only needs to know when it's done to move on. The watchdog
+            # allows for the directed follow-up phase beyond the listen
+            # window (see discovery.SCAN_TIMEOUT_MARGIN).
+            self._scan_task = self.hass.async_create_task(
+                asyncio.wait_for(
+                    scanner.scan(self._scan_duration),
+                    timeout=self._scan_duration + SCAN_TIMEOUT_MARGIN,
+                ),
+                name=f"{DOMAIN} bus scan",
+            )
+
+        if self._scan_task is not None:
+            if not self._scan_task.done():
+                elapsed = self.hass.loop.time() - self._scan_started
+                # A throwaway 1s task just paces the tick - it's not the scan
+                # itself, so a slow render doesn't delay the scan and the scan
+                # finishing early doesn't wait on this tick.
+                tick = self.hass.async_create_task(asyncio.sleep(1))
+                if elapsed < self._scan_duration:
+                    seconds_left = max(0, round(self._scan_duration - elapsed))
+                    return self.async_show_progress(
+                        step_id="scan_bus",
+                        progress_action="bus_scan",
+                        description_placeholders={
+                            "seconds_left": str(seconds_left)
+                        },
+                        progress_task=tick,
+                    )
+                # Listen window over; the scanner is now doing its directed
+                # follow-up reads to confirm channel counts. Show a distinct
+                # message instead of freezing the countdown at 0.
+                return self.async_show_progress(
+                    step_id="scan_bus",
+                    progress_action="bus_scan_confirming",
+                    progress_task=tick,
+                )
+
+            task, self._scan_task = self._scan_task, None
+            try:
+                self._scan_results = task.result()
+            except (asyncio.TimeoutError, RuntimeError, OSError) as err:
+                _LOGGER.warning("Buspro bus scan failed: %s", err)
+                return self.async_abort(reason="scan_failed")
+
+            if not self._scan_results:
+                return self.async_show_progress_done(
+                    next_step_id="scan_bus_no_devices"
+                )
+            return self.async_show_progress_done(next_step_id="scan_bus_devices")
+
+        # No scan running yet: ask for the listen duration.
+        return self.async_show_form(
+            step_id="scan_bus",
+            data_schema=vol.Schema({
+                vol.Required(
+                    CONF_SCAN_DURATION, default=DEFAULT_SCAN_DURATION
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_SCAN_DURATION,
+                        max=MAX_SCAN_DURATION,
+                        step=1,
+                        unit_of_measurement="s",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+            }),
+        )
+
+    async def async_step_scan_bus_no_devices(self, user_input=None):
+        """Abort after a scan that found nothing."""
+        return self.async_abort(reason="no_devices_found")
+
+    # ----- scan results: checklist import ----------------------------------
+    def _infer_type(self, disc):
+        """Classify a discovered device (lazy import of the scanner module)."""
+        from .discovery import SCAN_TYPE_LABELS, infer_device_type
+
+        return infer_device_type(disc), SCAN_TYPE_LABELS
+
+    def _existing_triples(self):
+        """(type, subnet, device, channel-ish) tuples already configured."""
+        triples = set()
+        for cfg in self.devices.values():
+            triples.add((
+                cfg.get(CONF_DEVICE_TYPE),
+                cfg.get(CONF_SUBNET_ID),
+                cfg.get(CONF_DEVICE_ID),
+                cfg.get(CONF_CHANNEL),
+            ))
+        return triples
+
+    def _import_discovered(self, disc, classification, *, subtype_override: str | None = None):
+        """Build fully-populated device configs for one discovered module.
+
+        Every field the entity platforms need (subnet/device/channel/type/
+        subtype/...) is filled in here -- the user only ticks checkboxes.
+        Multi-channel modules are split into per-channel entries (per-channel
+        lights/switches, per-curtain covers, per-unit AC climates).
+        """
+        from .const import DEVICE_TYPE_AC, DEVICE_TYPE_CURTAIN
+
+        s, d = disc.subnet_id, disc.device_id
+        count = disc.channel_count or 1
+        configs = []
+        ops = disc.op_codes
+
+        if classification == DEVICE_TYPE_CURTAIN:
+            subtype = "curtain_module"
+            for ch in range(1, max(count, 1) + 1):
+                key = f"{DEVICE_TYPE_COVER}_{s}_{d}_{ch}_{subtype}"
+                configs.append((
+                    key,
+                    {
+                        CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
+                        CONF_SUBNET_ID: s,
+                        CONF_DEVICE_ID: d,
+                        CONF_CHANNEL: ch,
+                        CONF_SUBTYPE: subtype,
+                        CONF_TRAVEL_TIME: 15,
+                        "name": f"HDL {disc.address} curtain{ch}",
+                    },
+                ))
+        elif classification == DEVICE_TYPE_AC:
+            subtype = "ac"
+            for ac_number in range(1, max(count, 1) + 1):
+                key = f"{DEVICE_TYPE_CLIMATE}_{s}_{d}_{subtype}_{ac_number}"
+                configs.append((
+                    key,
+                    {
+                        CONF_DEVICE_TYPE: DEVICE_TYPE_CLIMATE,
+                        CONF_SUBNET_ID: s,
+                        CONF_DEVICE_ID: d,
+                        CONF_SUBTYPE: subtype,
+                        CONF_AC_NUMBER: ac_number,
+                        "name": f"HDL {disc.address} AC{ac_number}",
+                    },
+                ))
+        elif classification == DEVICE_TYPE_CLIMATE:
+            subtype = "floor_heating"
+            key = f"{DEVICE_TYPE_CLIMATE}_{s}_{d}_{subtype}_1"
+            configs.append((
+                key,
+                {
+                    CONF_DEVICE_TYPE: DEVICE_TYPE_CLIMATE,
+                    CONF_SUBNET_ID: s,
+                    CONF_DEVICE_ID: d,
+                    CONF_SUBTYPE: subtype,
+                    CONF_AC_NUMBER: 1,
+                    "name": f"HDL {disc.address} heating",
+                },
+            ))
+        elif classification == DEVICE_TYPE_SENSOR:
+            # Subtype may be overridden by the scan_bus_devices form
+            subtype = subtype_override if subtype_override is not None else (
+                "temperature" if "temperature" in SENSOR_SUBTYPES
+                else SENSOR_SUBTYPES[0]
+            )
+            key = f"{DEVICE_TYPE_SENSOR}_{s}_{d}_{subtype}"
+            configs.append((
+                key,
+                {
+                    CONF_DEVICE_TYPE: DEVICE_TYPE_SENSOR,
+                    CONF_SUBNET_ID: s,
+                    CONF_DEVICE_ID: d,
+                    CONF_SUBTYPE: subtype,
+                    "name": f"HDL {disc.address} sensor",
+                },
+            ))
+        elif classification == DEVICE_TYPE_BINARY_SENSOR:
+            # Universal-switch modules vs dry-contact modules, told apart by
+            # which probe they answered.
+            if "ReadStatusOfUniversalSwitchResponse" in ops:
+                subtype = (
+                    "universal_switch"
+                    if "universal_switch" in BINARY_SENSOR_SUBTYPES
+                    else BINARY_SENSOR_SUBTYPES[0]
+                )
+            else:
+                subtype = (
+                    "dry_contact"
+                    if "dry_contact" in BINARY_SENSOR_SUBTYPES
+                    else BINARY_SENSOR_SUBTYPES[0]
+                )
+            key = f"{DEVICE_TYPE_BINARY_SENSOR}_{s}_{d}_1_{subtype}"
+            configs.append((
+                key,
+                {
+                    CONF_DEVICE_TYPE: DEVICE_TYPE_BINARY_SENSOR,
+                    CONF_SUBNET_ID: s,
+                    CONF_DEVICE_ID: d,
+                    CONF_CHANNEL: 1,
+                    CONF_SUBTYPE: subtype,
+                    "name": f"HDL {disc.address} binary_sensor",
+                },
+            ))
+        else:
+            # switch / light: split into one entry per known channel.
+            dtype = (
+                classification if classification in (DEVICE_TYPE_LIGHT, DEVICE_TYPE_SWITCH)
+                else DEVICE_TYPE_SWITCH
+            )
+            for ch in range(1, max(count, 1) + 1):
+                key = f"{dtype}_{s}_{d}_{ch}"
+                configs.append((
+                    key,
+                    {
+                        CONF_DEVICE_TYPE: dtype,
+                        CONF_SUBNET_ID: s,
+                        CONF_DEVICE_ID: d,
+                        CONF_CHANNEL: ch,
+                        "name": f"HDL {disc.address} ch{ch}",
+                    },
+                ))
+        return configs
+
+    async def async_step_scan_bus_devices(self, user_input=None):
+        """Let the user tick which discovered devices to import.
+
+        For sensor-type devices an extra subtype dropdown is shown per sensor
+        (temperature vs. illuminance) so the right entity class is created.
+        """
+        from .const import DEVICE_TYPE_AC, DEVICE_TYPE_CURTAIN, DEVICE_TYPE_SENSOR
+
+        results = self._scan_results
+        if not results:
+            return self.async_abort(reason="no_devices_found")
+
+        # Pre-classify all results
+        classified: list[tuple] = []  # (disc, classification, label, new_keys)
+        options: list[selector.SelectOptionDict] = []
+        default_selected: list[str] = []
+        for disc in results:
+            classification, labels = self._infer_type(disc)
+            if classification is None:
+                continue
+            configs = self._import_discovered(disc, classification)
+            new_keys = [k for k, _ in configs if k not in self.devices]
+            parts = [disc.address, labels.get(classification, classification)]
+            if disc.type_code and disc.type_code != "0x0000":
+                parts.append(disc.type_code)
+            if disc.channel_count:
+                parts.append(f"{disc.channel_count}ch")
+            label = "  ·  ".join(parts)
+            if not new_keys:
+                label += "  ✓ 已存在"
+            else:
+                default_selected.extend(new_keys)
+            options.append(selector.SelectOptionDict(value=disc.key, label=label))
+            classified.append((disc, classification, label, new_keys))
+
+        if not classified:
+            return self.async_abort(reason="no_devices_found")
+
+        # Identify sensor entries for subtype selection
+        sensor_entries = [(disc, new_keys) for disc, cls, _, new_keys in classified
+                          if cls == DEVICE_TYPE_SENSOR]
+
+        if user_input is not None:
+            chosen = set(user_input.get(SCAN_DEVICES_SELECTION, []))
+            sensor_subtypes = user_input.get("sensor_subtypes", {})
+            by_disc_key = {d.key: d for d in results}
+            by_classification = {d.key: c for d, c, _, _ in classified}
+            added = 0
+            for disc_key in chosen:
+                disc = by_disc_key.get(disc_key)
+                if disc is None:
+                    continue
+                classification = by_classification.get(disc_key)
+                if classification is None:
+                    continue
+                # For sensors, override the default subtype with user's choice
+                subtype_override = None
+                if classification == DEVICE_TYPE_SENSOR:
+                    subtype_override = sensor_subtypes.get(disc_key, "temperature")
+                for dev_key, dev_cfg in self._import_discovered(
+                    disc, classification, subtype_override=subtype_override
+                ):
+                    if dev_key in self.devices:
+                        continue
+                    self.devices[dev_key] = dev_cfg
+                    added += 1
+            _LOGGER.info("Bus scan import: added %d device(s)", added)
+            return self.async_create_entry(
+                title="",
+                data={CONF_DEVICES: self.devices},
+            )
+
+        # Build form with optional per-sensor subtype field
+        form_schema: dict = {
+            vol.Optional(
+                SCAN_DEVICES_SELECTION,
+                default=default_selected,
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options,
+                    mode=selector.SelectSelectorMode.LIST,
+                    multiple=True,
+                )
+            ),
+        }
+        if sensor_entries:
+            sensor_subtype_schema: dict = {}
+            for disc, _new_keys in sensor_entries:
+                sensor_subtype_schema[vol.Optional(disc.key, default="temperature")] = (
+                    selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value="temperature", label="温度传感器"),
+                                selector.SelectOptionDict(value="illuminance", label="亮度传感器"),
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                )
+            form_schema["sensor_subtypes"] = vol.Schema(sensor_subtype_schema)
+
+        return self.async_show_form(
+            step_id="scan_bus_devices",
+            data_schema=vol.Schema(form_schema),
+            description_placeholders={
+                "found": str(len(classified)),
+                "new": str(len(default_selected)),
+            },
+        )
+
+    # ----- manual device management (unchanged) ----------------------------
     async def async_step_add_device(self, user_input=None):
         """Step: select device type."""
         if user_input is not None:

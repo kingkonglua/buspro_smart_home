@@ -7,7 +7,7 @@ https://home-assistant.io/components/...
 
 import logging
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorEntity, SensorStateClass, SensorDeviceClass
 from homeassistant.const import (
     ILLUMINANCE,
     TEMPERATURE,
@@ -76,6 +76,7 @@ class BusproSensor(SensorEntity):
         self._sensor_type = sensor_type
         self._temperature = None
         self._brightness = None
+        self._received = False
         self.async_register_callbacks()
 
     @callback
@@ -88,6 +89,7 @@ class BusproSensor(SensorEntity):
             if self._hass is not None:
                 self._temperature = self._device.temperature
                 self._brightness = self._device.brightness
+                self._received = True
                 self.async_write_ha_state()
 
         self._device.register_device_updated_cb(after_update_callback)
@@ -109,14 +111,20 @@ class BusproSensor(SensorEntity):
     def available(self):
         """Return True if entity is available."""
         connected = self._hass.data[DATA_BUSPRO].connected
+        if not connected:
+            return False
 
         if self._sensor_type == TEMPERATURE:
-            return connected and self._temperature is not None
+            return self._temperature is not None
 
         if self._sensor_type == ILLUMINANCE:
-            return connected and self._brightness is not None
+            return self._brightness is not None
 
-        return connected
+        # Other types (e.g. dry_contact): do not report as permanently
+        # available just because the gateway is connected. Require that the
+        # device has actually reported its status at least once, otherwise a
+        # never-responded entity would always show as available.
+        return self._received
 
     @property
     def native_value(self):
@@ -132,10 +140,11 @@ class BusproSensor(SensorEntity):
     @property
     def device_class(self):
         """Return the class of this sensor."""
+        # BUGFIX: use SensorDeviceClass enum members instead of raw strings
         if self._sensor_type == TEMPERATURE:
-            return "temperature"
+            return SensorDeviceClass.TEMPERATURE
         if self._sensor_type == ILLUMINANCE:
-            return "illuminance"
+            return SensorDeviceClass.ILLUMINANCE
         return None
 
     @property

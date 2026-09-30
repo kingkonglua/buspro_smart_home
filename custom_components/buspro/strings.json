@@ -2,25 +2,34 @@
   "config": {
     "step": {
       "user": {
-        "title": "HDL Buspro Gateway",
-        "description": "Enter the IP address and port number of the HDL Buspro gateway.",
+        "title": "HDL Buspro 网关",
+        "description": "自动发现局域网中的 HDL Buspro 网关，选择后继续配置；也可手动输入 IP 和端口。",
         "data": {
-          "host": "Host IP address",
-          "port": "Port number"
+          "gateway_choice": "选择已发现的网关 IP",
+          "host": "网关 IP 地址",
+          "port": "端口号"
+        }
+      },
+      "manual": {
+        "title": "手动输入网关地址",
+        "description": "输入 HDL Buspro 网关的 IP 地址和端口号。",
+        "data": {
+          "host": "IP 地址",
+          "port": "端口号"
         }
       }
     },
     "abort": {
-      "already_configured": "This gateway is already configured."
+      "already_configured": "该网关已配置。"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "HDL Buspro Device Management",
-        "description": "Current devices:\n{devices}\n\nSelect an action:",
+        "title": "集成操作",
+        "description": "选择一项操作：",
         "data": {
-          "action": "Action"
+          "action": "操作类型"
         }
       },
       "add_device": {
@@ -105,12 +114,42 @@
         }
       },
       "remove_device": {
-        "title": "Remove Device",
-        "description": "Select a device to remove.",
+        "title": "移除设备",
+        "description": "选择要移除的设备：",
         "data": {
-          "device": "Device"
+          "device": "要移除的设备"
         }
+      },
+      "scan_bus": {
+        "title": "扫描总线设备",
+        "description": "开始扫描总线上的所有设备，扫描完成后展示结果供勾选导入。",
+        "data": {
+          "scan_duration": "扫描时长（秒）"
+        }
+      },
+      "scan_bus_devices": {
+        "title": "选择要导入的设备",
+        "description": "Select devices to import. For sensors, choose subtype (temperature or illuminance) per device."
       }
+    },
+    "progress": {
+      "bus_scan": {
+        "title": "总线扫描中...",
+        "description": "正在向总线发送探测请求并收集设备响应，请稍候。"
+      },
+      "bus_scan_confirming": {
+        "title": "确认设备信息...",
+        "description": "正在验证扫描到的设备数据，请稍候。"
+      }
+    },
+    "abort": {
+      "gateway_unavailable": "网关不可达，无法继续。",
+      "scan_failed": "扫描失败，请检查网络连接后重试。",
+      "no_devices_found": "未发现设备，请检查网关配置和总线连接。"
+    },
+    "error": {
+      "already_exists": "设备 {device_key} 已存在，不能重复添加。",
+      "gateway_unavailable": "网关不可达，无法继续。"
     }
   }
 }

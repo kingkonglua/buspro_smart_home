@@ -34,10 +34,12 @@ class UniversalSwitch(Device):
                 self._call_device_updated()
 
     async def set_on(self):
-        await self._set(OnOff.ON)
+        # BUGFIX: use SwitchStatusOnOff.ON (value 1); OnOff.ON is 255 which HDL rejects
+        await self._set(SwitchStatusOnOff.ON)
 
     async def set_off(self):
-        await self._set(OnOff.OFF)
+        # BUGFIX: use SwitchStatusOnOff.OFF (value 0)
+        await self._set(SwitchStatusOnOff.OFF)
 
     async def read_status(self):
         raise NotImplementedError

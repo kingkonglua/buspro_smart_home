@@ -182,9 +182,11 @@ class Sensor(Device):
     def temperature(self):
         if self._current_temperature is None:
             return None
-        if self._device is not None and self._device == "dlp":
-            return self._current_temperature
-        if self._device is not None and self._device == "12in1":
+        # HDL protocol encodes temperature as raw = actual + 20 to avoid
+        # negatives. 12in1 already subtracts 20 at ingest, so return it raw
+        # here. Other (general) temperature sensors are NOT offset at ingest,
+        # so apply the -20 calibration here to report the true temperature.
+        if self._device is not None and self._device in ("dlp", "12in1"):
             return self._current_temperature
         return self._current_temperature - 20
 
