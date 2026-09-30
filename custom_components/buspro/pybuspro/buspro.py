@@ -1,64 +1,91 @@
-﻿''' pybuspro version 1.0.0  '''
+﻿"""Top-level Buspro client object."""
+from __future__ import annotations
 
 import asyncio
 import logging
 
-from .helpers.enums import *
+from .helpers.enums import OperateCode
 from .transport.network_interface import NetworkInterface
 
 
-# ip, port = gateway_address
-# subnet_id, device_id, channel = device_address
-
-
 class StateUpdater:
-    def __init__(self, buspro, sleep=10):
+    """Periodic state refresher (optional)."""
+
+    def __init__(self, buspro: "Buspro", sleep: int = 10) -> None:
         self.buspro = buspro
         self.run_forever = True
-        self.run_task = None
+        self.run_task: asyncio.Task | None = None
         self.sleep = sleep
 
-    async def start(self):
+    async def start(self) -> None:
+        """Start the periodic loop."""
         self.run_task = self.buspro.loop.create_task(self.run())
 
-    async def run(self):
+    async def run(self) -> None:
+        """Run the periodic sync."""
         await asyncio.sleep(0)
-        self.buspro.logger.info("Starting StateUpdater with {} seconds interval".format(self.sleep))
-
+        self.buspro.logger.info(
+            "Starting StateUpdater with %s seconds interval", self.sleep
+        )
         while True:
             await asyncio.sleep(self.sleep)
             await self.buspro.sync()
 
 
 class Buspro:
+    """Client for an HDL Buspro gateway."""
 
-    def __init__(self, gateway_address_send_receive, loop_=None):
+    def __init__(
+        self,
+        gateway_address_send_receive,
+        loop_=None,
+    ) -> None:
+        """Initialize the Buspro client."""
         self.loop = loop_ or asyncio.get_event_loop()
-        self.state_updater = None
+        self.state_updater: StateUpdater | None = None
         self.started = False
-        self.network_interface = None
+        self.network_interface: NetworkInterface | None = None
         self.logger = logging.getLogger("buspro.log")
         self.telegram_logger = logging.getLogger("buspro.telegram")
 
         self.callback_all_messages = None
-        self._telegram_received_cbs = []
+        self._telegram_received_cbs: list[dict] = []
+
+        # Optional hook fired when the UDP transport is lost unexpectedly
+        # (not on a clean stop()). Set by the integration's gateway wrapper.
+        self.on_connection_lost = None
+
+        # Source-IP allowlist for incoming UDP frames. When non-empty, the
+        # network interface drops datagrams from any other IP, so telegrams
+        # broadcast by *other* HDL gateways/software on the same L2 segment
+        # cannot pollute this instance with phantom devices. Populated by the
+        # integration's setup path after resolving the configured host.
+        self.allowed_source_ips: set[str] = set()
+        # Source IPs whose frames have been dropped by the filter above, so
+        # each is reported once and can be surfaced in diagnostics.
+        self.dropped_source_ips: set[str] = set()
+
+        # The IP this client advertises inside every outbound telegram's
+        # 4-byte header (see TelegramHelper.build_send_buffer). Left None the
+        # helper falls back to the historical 192.168.1.15 constant, so this
+        # is strictly an improvement when set.
+        self.advertised_ip: str | None = None
 
         self.gateway_address_send_receive = gateway_address_send_receive
 
     def __del__(self):
         # Do NOT run coroutines from __del__: calling run_until_complete()
-        # here can conflict with an already running/closed event loop and
-        # raise "This event loop is already running" or similar errors.
-        # Just flag the instance as stopped; teardown is best-effort and
-        # must be driven via the explicit async start()/stop() API.
+        # here can conflict with an already running/closed event loop.
         try:
             self.started = False
         except Exception:
             pass
 
-    # noinspection PyUnusedLocal
-    async def start(self, state_updater=False):  # , daemon_mode=False):
-        self.network_interface = NetworkInterface(self, self.gateway_address_send_receive)
+    async def start(self, state_updater: bool = False) -> None:
+        """Connect to the gateway and start listening for telegrams."""
+        self.network_interface = NetworkInterface(
+            self, self.gateway_address_send_receive
+        )
         self.network_interface.register_callback(self._callback_all_messages)
         await self.network_interface.start()
 
@@ -66,67 +93,88 @@ class Buspro:
             self.state_updater = StateUpdater(self)
             await self.state_updater.start()
 
-        '''
-        if daemon_mode:
-            await self._loop_until_sigint()
-        '''
-
         self.started = True
 
-        # await asyncio.sleep(5)
-        # await self.network_interface.send_message(b'\0x01')
-
-    async def stop(self):
+    async def stop(self) -> None:
+        """Disconnect from the gateway."""
         await self._stop_network_interface()
         self.started = False
 
-    def _callback_all_messages(self, telegram):
+    def _callback_all_messages(self, telegram) -> None:
+        """Invoke per-device callbacks for an incoming telegram."""
+        if telegram is None:
+            return
         self.telegram_logger.debug(telegram)
 
         if self.callback_all_messages is not None:
             self.callback_all_messages(telegram)
 
-        for telegram_received_cb in self._telegram_received_cbs:
-            device_address = telegram_received_cb['device_address']
-
-            # Sender callback kun for oppgitt kanal
-            if device_address == telegram.target_address or device_address == telegram.source_address:
+        # Every per-device handler decodes a *Response / *Broadcast frame,
+        # i.e. state the device reports about ITSELF, so only the sender's
+        # handlers may see it. Matching the target address too meant a reply
+        # sent TO a device was decoded as that device's own state.
+        source = telegram.source_address
+        if source is not None:
+            source = tuple(source)
+        for cb in list(self._telegram_received_cbs):
+            device_address = cb["device_address"]
+            if device_address is not None and tuple(device_address) == source:
                 if telegram.operate_code is not OperateCode.TIME_IF_FROM_LOGIC_OR_SECURITY:
-                    postfix = telegram_received_cb['postfix']
+                    postfix = cb.get("postfix")
                     try:
                         if postfix is not None:
-                            telegram_received_cb['callback'](telegram, postfix)
+                            cb["callback"](telegram, postfix)
                         else:
-                            telegram_received_cb['callback'](telegram)
-                    except Exception as exp:
-                        self.logger.error(
-                            "Error in telegram callback for device %s: %s",
-                            device_address, exp,
-                            exc_info=True,
-                        )
+                            cb["callback"](telegram)
+                    except Exception as err:  # noqa: BLE001
+                        self.logger.warning("Telegram callback error: %s", err)
 
-    async def _stop_network_interface(self):
+    def _notify_connection_lost(self) -> None:
+        """Called by the transport when the socket dies unexpectedly."""
+        if self.on_connection_lost is None:
+            return
+        try:
+            self.on_connection_lost()
+        except Exception as err:  # noqa: BLE001
+            self.logger.warning("on_connection_lost callback error: %s", err)
+
+    async def _stop_network_interface(self) -> None:
         if self.network_interface is not None:
             await self.network_interface.stop()
             self.network_interface = None
 
-    def register_telegram_received_all_messages_cb(self, telegram_received_cb):
+    def register_telegram_received_all_messages_cb(self, telegram_received_cb) -> None:
+        """Register a global telegram callback."""
         self.callback_all_messages = telegram_received_cb
 
-    def register_telegram_received_device_cb(self, telegram_received_cb, device_address, postfix=None):
-        self._telegram_received_cbs.append({
-            'callback': telegram_received_cb,
-            'device_address': device_address,
-            'postfix': postfix})
+    def register_telegram_received_device_cb(
+        self, telegram_received_cb, device_address, postfix=None
+    ) -> None:
+        """Register a per-device telegram callback."""
+        self._telegram_received_cbs.append(
+            {
+                "callback": telegram_received_cb,
+                "device_address": device_address,
+                "postfix": postfix,
+            }
+        )
 
-    def unregister_telegram_received_device_cb(self, telegram_received_cb, device_address, postfix=None):
-        self._telegram_received_cbs.remove({
-            'callback': telegram_received_cb,
-            'device_address': device_address,
-            'postfix': postfix})
+    def unregister_telegram_received_device_cb(
+        self, telegram_received_cb, device_address, postfix=None
+    ) -> None:
+        """Unregister a per-device telegram callback."""
+        try:
+            self._telegram_received_cbs.remove(
+                {
+                    "callback": telegram_received_cb,
+                    "device_address": device_address,
+                    "postfix": postfix,
+                }
+            )
+        except ValueError:
+            pass
 
     @staticmethod
-    async def sync():
-        # await self.callback("LOG: Sync() triggered from StateUpdater")
-        # print("LOG: Sync() triggered from StateUpdater")
+    async def sync():  # pragma: no cover - kept for API parity
+        """Hook for the optional StateUpdater."""
         raise NotImplementedError

@@ -105,6 +105,18 @@ class OperateCode(Enum):
     BroadcastSensorStatusAutoResponse = b'\x16\x47'
 
     BroadcastTemperatureResponse = b'\xE3\xE5'
+    # 周期光照推送（sensors-in-one / 7in1），payload = [?, 1, lux_hi, lux_lo, ?, ?]
+    # 对齐上游 v5.0.7：此前未定义导致 0xE441 被静默丢弃。
+    BroadcastLuminanceResponse = b'\xE4\x41'
+
+    # 面板（MPTL/Granite）按通道读温度：请求 [channel]，
+    # 响应 [channel, 整数摄氏度, float32 小端摄氏度]。上游 v5.0.7 新增。
+    ReadTemperature = b'\xE3\xE7'
+    ReadTemperatureResponse = b'\xE3\xE8'
+
+    # CMS-PIR 类模块只应答 0xDB00/0xDB01（无 0x1645 响应）。上游 v5.0.7 新增。
+    ReadMotionSensorStatus = b'\xDB\x00'
+    ReadMotionSensorStatusResponse = b'\xDB\x01'
 
     ReadFloorHeatingStatus = b'\x19\x44'
     ReadFloorHeatingStatusResponse = b'\x19\x45'
@@ -116,6 +128,9 @@ class OperateCode(Enum):
 
     ReadSensorsInOneStatus = b'\x16\x04'
     ReadSensorsInOneStatusResponse = b'\x16\x05'
+    # sensors_in_one 主动推送，payload 布局同 0x1605。上游 v5.0.7 新增，
+    # 未定义时 0x1630 会被解码为 operate_code=None 而被丢弃。
+    BroadcastSensorsInOneStatusResponse = b'\x16\x30'
 
     CurtainSwitchControl = b'\xE3\xE0'
     CurtainSwitchControlResponse = b'\xE3\xE1'
@@ -127,6 +142,14 @@ class OperateCode(Enum):
     ReadAcStatusResponse = b'\x19\x39'
     ControlAcStatus = b'\x19\x3A'
     ControlAcStatusResponse = b'\x19\x3B'
+
+    # 触控面板空调页（HDL Enviro / Granite 系列）一帧一个字段：
+    # [field, value, ac_channel]；读请求 [field, ch, ch]。
+    # 见上游 pybuspro/devices/panel_ac.py。上游 v5.0.7 新增。
+    ControlPanelAC = b'\xE3\xD8'
+    ControlPanelACResponse = b'\xE3\xD9'
+    ReadPanelAC = b'\xE3\xDA'
+    ReadPanelACResponse = b'\xE3\xDB'
 
     """
     # 

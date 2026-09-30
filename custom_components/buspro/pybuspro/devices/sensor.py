@@ -58,6 +58,21 @@ class Sensor(Device):
             self._dry_contact_2_status = telegram.payload[9]
             self._call_device_updated()
 
+        # sensors_in_one 主动推送。对齐上游 v5.0.7：0x1630 与轮询的 0x1605
+        # 布局不同——没有开头的 success 字节，所有字段整体前移一格。
+        # 因此温度在 [0]（仍为 +20 偏移，由 temperature 属性校正），lux 在
+        # [1..2]。motion 字节上游在抓包确认前刻意不解析，这里同样不解析，
+        # 避免凭空产生误触发。
+        elif telegram.operate_code == OperateCode.BroadcastSensorsInOneStatusResponse:
+            if not telegram.payload:
+                return
+            self._current_temperature = telegram.payload[0]
+            if len(telegram.payload) >= 3:
+                brightness_high = telegram.payload[1]
+                brightness_low = telegram.payload[2]
+                self._brightness = brightness_high + brightness_low
+            self._call_device_updated()
+
         elif telegram.operate_code == OperateCode.BroadcastSensorStatusResponse:
             if len(telegram.payload) < 7:
                 return

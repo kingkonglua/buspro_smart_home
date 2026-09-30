@@ -28,13 +28,19 @@ class Device(object):
 
     def unregister_device_updated_cb(self, device_updated_cb):
         """Unregister device updated callback."""
-        self.device_updated_cbs.remove(device_updated_cb)
+        if device_updated_cb in self.device_updated_cbs:
+            self.device_updated_cbs.remove(device_updated_cb)
 
     async def _device_updated(self):
-        for device_updated_cb in self.device_updated_cbs:
-            await device_updated_cb(self)
+        for device_updated_cb in list(self.device_updated_cbs):
+            try:
+                await device_updated_cb(self)
+            except Exception:  # noqa: BLE001
+                self._buspro.logger.exception("Device-updated callback failed")
 
     async def _send_telegram(self, telegram):
+        if self._buspro.network_interface is None:
+            return
         await self._buspro.network_interface.send_telegram(telegram)
 
     # async def _send_control(self, control):
