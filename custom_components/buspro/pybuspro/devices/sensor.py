@@ -49,7 +49,7 @@ class Sensor(Device):
             # comparison was always False and this reply never updated HA.
             # Store the readings unconditionally (some firmware does not use
             # 0xF8 in the success byte) and always notify listeners.
-            self._brightness = brightness_high + brightness_low
+            self._brightness = (brightness_high << 8) | brightness_low
             self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.ReadSensorsInOneStatusResponse:
@@ -73,7 +73,7 @@ class Sensor(Device):
             if len(telegram.payload) >= 3:
                 brightness_high = telegram.payload[1]
                 brightness_low = telegram.payload[2]
-                self._brightness = brightness_high + brightness_low
+                self._brightness = (brightness_high << 8) | brightness_low
             self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.BroadcastSensorStatusResponse:
@@ -86,7 +86,7 @@ class Sensor(Device):
             self._sonic = telegram.payload[4]
             self._dry_contact_1_status = telegram.payload[5]
             self._dry_contact_2_status = telegram.payload[6]
-            self._brightness = brightness_high + brightness_low
+            self._brightness = (brightness_high << 8) | brightness_low
             self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.BroadcastSensorStatusAutoResponse:
@@ -102,7 +102,7 @@ class Sensor(Device):
             self._sonic = telegram.payload[4]
             self._dry_contact_1_status = telegram.payload[5]
             self._dry_contact_2_status = telegram.payload[6]
-            self._brightness = brightness_high + brightness_low
+            self._brightness = (brightness_high << 8) | brightness_low
             self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.ReadFloorHeatingStatusResponse:
