@@ -35,11 +35,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Buspro button devices from a config entry."""
-    # noinspection PyUnresolvedReferences
-    from .pybuspro.devices.control import _UniversalSwitch
-    # noinspection PyUnresolvedReferences
-    from .pybuspro.helpers.enums import OnOff
-
     buspro_module = hass.data[DOMAIN]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
@@ -92,7 +87,7 @@ class BusproButton(ButtonEntity):
         # noinspection PyUnresolvedReferences
         from .pybuspro.devices.control import _UniversalSwitch
         # noinspection PyUnresolvedReferences
-        from .pybuspro.helpers.enums import OnOff
+        from .pybuspro.helpers.enums import SwitchStatusOnOff
 
         _LOGGER.debug(
             "Pressing button '%s' (address %s, switch %s)",
@@ -102,5 +97,5 @@ class BusproButton(ButtonEntity):
         us = _UniversalSwitch(self._hdl)
         us.subnet_id, us.device_id = self._device_address
         us.switch_number = self._switch_number
-        us.switch_status = OnOff.ON
+        us.switch_status = SwitchStatusOnOff.ON
         await us.send()
