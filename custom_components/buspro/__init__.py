@@ -5,7 +5,9 @@ For more details about this component, please refer to the documentation at
 https://home-assistant.io/...
 """
 
+import asyncio
 import logging
+import socket
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
@@ -28,6 +30,14 @@ _LOGGER = logging.getLogger(__name__)
 
 DATA_BUSPRO = "buspro"
 DEPENDENCIES = []
+
+# Event fired on the HA bus when a gateway's UDP transport dies unexpectedly,
+# so automations/notifications can react to a gateway going offline.
+EVENT_BUSPRO_CONNECTION_LOST = f"{DOMAIN}_connection_lost"
+
+# Exponential-ish reconnect backoff (seconds) after an unexpected transport
+# loss. The last value repeats until the gateway answers again.
+RECONNECT_DELAYS = [5, 10, 20, 30, 60]
 
 
 class BusproData(dict):
@@ -196,6 +206,16 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     _register_services(hass)
 
     buspro_module = BusproModule(hass, host, port)
+    buspro_module.entry_id = config_entry.entry_id
+
+    # R3: fill the three pybuspro hooks the integration owns. Done BEFORE
+    # start() so a transport failure while connecting is already observable via
+    # on_connection_lost. Guarded with getattr so test doubles that replace
+    # BusproModule with a bare object still work.
+    configure_hooks = getattr(buspro_module, "async_configure_hooks", None)
+    if configure_hooks is not None:
+        await configure_hooks()
+
     await buspro_module.start()
     hass.data[DOMAIN][config_entry.entry_id] = buspro_module
 
@@ -252,9 +272,14 @@ class BusproModule:
     def __init__(self, hass, host, port):
         """Initialize of Buspro module."""
         self.hass = hass
+        self.host = host
+        self.port = port
+        self.entry_id = None
         self.connected = False
         self.hdl = None
         self._stop_listener_unsub = None
+        self._stop_requested = False
+        self._reconnect_task = None
         self.gateway_address_send_receive = ((host, port), ('', port))
         self.init_hdl()
 
@@ -264,8 +289,212 @@ class BusproModule:
         from .pybuspro.buspro import Buspro
         self.hdl = Buspro(self.gateway_address_send_receive, self.hass.loop)
 
+    async def _async_run_blocking(self, func, *args):
+        """Run a blocking (socket) helper, on the executor when HA provides one."""
+        executor = getattr(self.hass, "async_add_executor_job", None)
+        if executor is not None:
+            return await executor(func, *args)
+        return func(*args)
+
+    async def async_configure_hooks(self):
+        """Fill the three pybuspro extension hooks owned by the integration.
+
+        These are read (never written) by the vendored ``pybuspro`` client, so
+        without this wiring a real installation:
+
+        * advertises the legacy placeholder 192.168.1.15 in every outbound
+          header, so relayed bus broadcasts never come back on any other
+          subnet (state stops updating);
+        * accepts telegrams from *any* HDL gateway on the L2 segment (phantom
+          devices from a neighbouring installation);
+        * never notices a dead UDP transport, so entities stay "available"
+          with stale state until HA is reloaded.
+        """
+        if self.hdl is None:
+            return
+        # BUG-1: source filter must be in place before start() opens the socket.
+        await self._async_refresh_source_filter()
+        # BUG-2: resolve the local address used to reach the gateway.
+        await self._async_refresh_advertised_ip()
+        # BUG-3: let pybuspro tell us when the transport dies so we can flip
+        # availability and reconnect.
+        self.hdl.on_connection_lost = self._handle_connection_lost
+
+    async def _async_refresh_source_filter(self):
+        """Allow only telegrams that actually come from this gateway.
+
+        Everything the gateway relays arrives from its own IP address, so this
+        is a precise filter. When the host cannot be resolved the filter is
+        left wide open (matching historical behaviour) rather than dropping
+        legitimate traffic.
+        """
+
+        def _resolve() -> set | None:
+            try:
+                infos = socket.getaddrinfo(self.host, None, socket.AF_INET)
+            except OSError:
+                return None
+            return {info[4][0] for info in infos}
+
+        try:
+            ips = await self._async_run_blocking(_resolve)
+        except OSError:
+            ips = None
+
+        allowed = set(ips) if ips else set()
+        # Always allow the configured host verbatim when it is already an IP
+        # literal (getaddrinfo may canonicalise it).
+        if self.host:
+            try:
+                socket.inet_aton(self.host)
+            except OSError:
+                pass
+            else:
+                allowed.add(self.host)
+
+        if not allowed:
+            _LOGGER.warning(
+                "Could not resolve gateway host %s; the source-IP filter is "
+                "disabled, so telegrams from other HDL gateways on the network "
+                "will NOT be filtered out",
+                self.host,
+            )
+            self.hdl.allowed_source_ips = set()
+            return
+        self.hdl.allowed_source_ips = allowed
+        _LOGGER.debug("Gateway %s source-IP filter set to %s", self.host, allowed)
+
+    def _probe_source_ip(self) -> str | None:
+        """Return the local IP the OS would use to reach the gateway.
+
+        A UDP ``connect()`` sends nothing; it only resolves the route, which is
+        exactly the interface whose IP is reachable from the gateway's subnet.
+        """
+        if not self.host:
+            return None
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.connect((self.host, self.port))
+            return sock.getsockname()[0]
+        except OSError:
+            return None
+        finally:
+            sock.close()
+
+    async def _async_refresh_advertised_ip(self):
+        """Pick the local IP advertised in every outbound telegram header.
+
+        Prefers Home Assistant's own network helper (it knows the gateway's
+        subnet) and falls back to a route probe. Left unset, the vendored
+        client falls back to the historical 192.168.1.15 constant.
+        """
+        ip = None
+        try:
+            from homeassistant.components.network import async_get_source_ip
+        except ImportError:
+            async_get_source_ip = None
+        if async_get_source_ip is not None and self.host:
+            try:
+                ip = await async_get_source_ip(self.hass, self.host)
+            except Exception:  # noqa: BLE001 - best effort, never fatal
+                ip = None
+
+        if not ip or ip == "0.0.0.0":  # noqa: S104 - sentinel, not a bind
+            try:
+                ip = await self._async_run_blocking(self._probe_source_ip)
+            except OSError:
+                ip = None
+
+        if not ip or ip == "0.0.0.0":  # noqa: S104 - sentinel, not a bind
+            _LOGGER.warning(
+                "Could not determine the local IP used to reach gateway %s; "
+                "outbound telegrams will advertise the legacy placeholder "
+                "address, which some HDL gateways will not route broadcasts to",
+                self.host,
+            )
+            return
+        self.hdl.advertised_ip = ip
+        _LOGGER.debug("Advertising local IP %s to gateway %s", ip, self.host)
+
+    def _handle_connection_lost(self):
+        """React to an unexpected transport loss (called from the event loop)."""
+        if getattr(self, "_stop_requested", False):
+            return
+        if self.connected:
+            _LOGGER.warning(
+                "Lost connection to Buspro gateway %s:%s; reconnecting",
+                self.host,
+                self.port,
+            )
+        self.connected = False
+        self._notify_connection_lost()
+        self._schedule_reconnect()
+
+    def _notify_connection_lost(self):
+        """Fire an HA event so automations can react to the gateway dropping."""
+        bus = getattr(self.hass, "bus", None)
+        fire = getattr(bus, "async_fire", None)
+        if fire is None:
+            return
+        try:
+            fire(
+                EVENT_BUSPRO_CONNECTION_LOST,
+                {
+                    "entry_id": self.entry_id,
+                    "host": self.host,
+                    "port": self.port,
+                },
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not fire %s: %s", EVENT_BUSPRO_CONNECTION_LOST, err)
+
+    def _schedule_reconnect(self):
+        """Schedule a reconnect attempt if one is not already running."""
+        if getattr(self, "_stop_requested", False):
+            return
+        task = getattr(self, "_reconnect_task", None)
+        if task is not None and not task.done():
+            return
+        creator = getattr(self.hass, "async_create_task", None)
+        if creator is None:
+            return
+        self._reconnect_task = creator(self._reconnect_loop())
+
+    async def _reconnect_loop(self):
+        """Keep trying to reconnect until it succeeds or the entry is unloaded."""
+        attempt = 0
+        while not getattr(self, "_stop_requested", False):
+            delay = RECONNECT_DELAYS[min(attempt, len(RECONNECT_DELAYS) - 1)]
+            await asyncio.sleep(delay)
+            if getattr(self, "_stop_requested", False):
+                return
+            try:
+                await self.hdl.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                await self.hdl.start(state_updater=False)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug(
+                    "Reconnect attempt %s to %s:%s failed: %s",
+                    attempt + 1,
+                    self.host,
+                    self.port,
+                    err,
+                )
+                attempt += 1
+                continue
+            await self._async_refresh_source_filter()
+            await self._async_refresh_advertised_ip()
+            self.connected = True
+            _LOGGER.info(
+                "Reconnected to Buspro gateway %s:%s", self.host, self.port
+            )
+            return
+
     async def start(self):
         """Start Buspro object. Connect to tunneling device."""
+        self._stop_requested = False
         await self.hdl.start(state_updater=False)
         # Keep the unsubscribe callback so the one-shot HA-stop listener does
         # not survive an unload/reload of this config entry (residual state).
@@ -278,6 +507,17 @@ class BusproModule:
     async def stop(self, event=None):
         """Stop Buspro object. Disconnect from tunneling device."""
         self.connected = False
+        self._stop_requested = True
+        task = getattr(self, "_reconnect_task", None)
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:  # noqa: BLE001
+                pass
+            self._reconnect_task = None
         unsub = getattr(self, "_stop_listener_unsub", None)
         if unsub is not None:
             self._stop_listener_unsub = None

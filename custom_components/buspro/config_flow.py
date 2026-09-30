@@ -23,6 +23,15 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+try:
+    # ``SelectOptionDict`` is a TypedDict that newer HA builds expose for
+    # select options; older builds only accept plain dicts. Falling back keeps
+    # config_flow importable (an ImportError here would make the whole
+    # integration fail with SETUP_ERROR before any entity is created).
+    from homeassistant.helpers.selector import SelectOptionDict
+except ImportError:  # pragma: no cover - version-compat shim
+    SelectOptionDict = dict
+
 from . import get_buspro_module
 from .const import (
     DOMAIN,
@@ -125,16 +134,16 @@ class BusproConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_manual()
 
         options = [
-            selector.SelectOptionDict(
+            SelectOptionDict(
                 value=ip, label=info.get("label", ip)
             )
             for ip, info in gateways.items()
         ]
         options.append(
-            selector.SelectOptionDict(value=CHOICE_RESCAN, label="Scan again")
+            SelectOptionDict(value=CHOICE_RESCAN, label="Scan again")
         )
         options.append(
-            selector.SelectOptionDict(
+            SelectOptionDict(
                 value=CHOICE_MANUAL, label="Enter address manually"
             )
         )
@@ -539,7 +548,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
         # Pre-classify all results
         classified: list[tuple] = []  # (disc, classification, label, new_keys)
-        options: list[selector.SelectOptionDict] = []
+        options: list[SelectOptionDict] = []
         default_selected: list[str] = []
         for disc in results:
             classification, labels = self._infer_type(disc)
@@ -557,7 +566,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 label += "  ✓ 已存在"
             else:
                 default_selected.extend(new_keys)
-            options.append(selector.SelectOptionDict(value=disc.key, label=label))
+            options.append(SelectOptionDict(value=disc.key, label=label))
             classified.append((disc, classification, label, new_keys))
 
         if not classified:
@@ -617,9 +626,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                     selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                selector.SelectOptionDict(value="temperature", label="温度传感器"),
-                                selector.SelectOptionDict(value="illuminance", label="亮度传感器"),
-                                selector.SelectOptionDict(value="humidity", label="湿度传感器"),
+                                SelectOptionDict(value="temperature", label="温度传感器"),
+                                SelectOptionDict(value="illuminance", label="亮度传感器"),
+                                SelectOptionDict(value="humidity", label="湿度传感器"),
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
