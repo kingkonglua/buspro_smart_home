@@ -62,7 +62,7 @@ async def async_setup_entry(
     # noinspection PyUnresolvedReferences
     from .pybuspro.devices import Curtain
 
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -224,7 +224,26 @@ class BusproCover(CoverEntity):
         elapsed = time.monotonic() - self._start_time
         delta = self._direction * (elapsed / self._travel_time * 100.0)
         position = self._position_at_start + delta
-        return max(0, min(100, position))
+        if position <= 0:
+            self._snap_to_limit(0)
+            return 0
+        if position >= 100:
+            self._snap_to_limit(100)
+            return 100
+        return position
+
+    def _snap_to_limit(self, value):
+        """Pin the tracked position to a limit and drop the movement baseline.
+
+        The bus only reports moving/stopped, so once the travel-time estimate
+        reaches (or overshoots) a limit the position must become a fixed
+        boundary value. Otherwise a later status snapshot would fight a stale
+        baseline and make the reported position jump.
+        """
+        self._fixed_position = value
+        self._direction = None
+        self._start_time = None
+        self._position_at_start = None
 
     def _fix_position(self):
         """Stop movement tracking and pin the position."""
@@ -237,6 +256,19 @@ class BusproCover(CoverEntity):
         self._direction = None
         self._start_time = None
         self._position_at_start = None
+        # The movement ended: clear the optimistic opening/closing flags so the
+        # cover does not keep reporting "opening"/"closing" until the next bus
+        # status report (BUG-C1).
+        self._attr_is_opening = False
+        self._attr_is_closing = False
+        # Keep is_closed consistent with the final position, mirroring
+        # _sync_from_bus_status().
+        if self._supports_position:
+            self._attr_is_closed = (
+                self._fixed_position is not None and self._fixed_position <= 0
+            )
+        else:
+            self._attr_is_closed = self._device.is_closed
 
     def _schedule_stop(self, delay):
         """Schedule a stop command after the given delay."""
@@ -306,6 +338,7 @@ class BusproCover(CoverEntity):
         _LOGGER.debug("Opening cover '%s'", self._device.name)
         if self._supports_position:
             self._start_movement(1)
+            self._schedule_stop(self._travel_time)
         await self._device.open()
 
     async def async_close_cover(self, **kwargs):
@@ -313,6 +346,7 @@ class BusproCover(CoverEntity):
         _LOGGER.debug("Closing cover '%s'", self._device.name)
         if self._supports_position:
             self._start_movement(-1)
+            self._schedule_stop(self._travel_time)
         await self._device.close()
 
     async def async_stop_cover(self, **kwargs):
