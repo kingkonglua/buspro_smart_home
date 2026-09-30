@@ -145,6 +145,12 @@
         }
       }
     },
+    "progress": {
+      "bus_scan": "Skanner bussen, {seconds_left} s gjenstår…",
+      "bus_scan_confirming": "Busskanningen er ferdig, bekrefter oppdagede enheter…",
+      "scan_bus_devices": "Skanningen er ferdig, laster inn oppdagede enheter…",
+      "scan_bus_no_devices": "Skanningen er ferdig, ingen enheter funnet på bussen."
+    },
     "abort": {
       "already_configured": "Denne gatewayen er allerede konfigurert.",
       "gateway_unavailable": "Gatewayen er utilgjengelig, kan ikke fortsette.",

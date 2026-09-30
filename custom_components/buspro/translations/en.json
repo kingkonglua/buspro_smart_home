@@ -145,6 +145,12 @@
         }
       }
     },
+    "progress": {
+      "bus_scan": "Scanning the bus, {seconds_left} s remaining…",
+      "bus_scan_confirming": "Bus scan complete, confirming discovered devices…",
+      "scan_bus_devices": "Scan complete, loading discovered devices…",
+      "scan_bus_no_devices": "Scan complete, no devices found on the bus."
+    },
     "abort": {
       "already_configured": "This gateway is already configured.",
       "gateway_unavailable": "Gateway unavailable, cannot continue.",

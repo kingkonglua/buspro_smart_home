@@ -145,6 +145,12 @@
         }
       }
     },
+    "progress": {
+      "bus_scan": "正在扫描总线，剩余 {seconds_left} 秒…",
+      "bus_scan_confirming": "总线扫描完成，正在确认设备信息，请稍候…",
+      "scan_bus_devices": "扫描完成，正在载入发现的设备…",
+      "scan_bus_no_devices": "扫描完成，未在总线上发现设备。"
+    },
     "abort": {
       "already_configured": "该网关已配置。",
       "gateway_unavailable": "网关不可达，无法继续。",
