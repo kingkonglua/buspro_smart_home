@@ -167,23 +167,25 @@ class AC(Device):
             and self._mode != new_mode
         )
         current_mode_temperature = self._current_mode_temperature
-        if current_mode_temperature is None or mode_changed:
-            if new_mode == AcMode.FAN.value:
-                # FAN mode has no target temperature; keep the previously
-                # known value instead of sending 0 (which the AC would
-                # interpret as an actual setpoint).
-                current_mode_temperature = (
-                    self._current_mode_temperature
-                    if self._current_mode_temperature is not None
-                    else DEFAULT_TEMPERATURE
-                )
-            else:
-                current_mode_temperature = {
-                    AcMode.COOL.value: cooling,
-                    AcMode.HEAT.value: heating,
-                    AcMode.AUTO.value: auto,
-                    AcMode.DRY.value: dry,
-                }.get(new_mode, DEFAULT_TEMPERATURE)
+        if new_mode == AcMode.FAN.value:
+            # FAN mode has no target temperature; keep the previously
+            # known value instead of sending 0 (which the AC would
+            # interpret as an actual setpoint).
+            if current_mode_temperature is None:
+                current_mode_temperature = DEFAULT_TEMPERATURE
+        elif temperature is not None:
+            # F-1: an explicit temperature request must also drive byte 11
+            # (HDL "Setup Temperature"), which is what actually moves the
+            # unit -- writing only the per-mode memory slot left the unit on
+            # its old setpoint.
+            current_mode_temperature = temperature
+        elif current_mode_temperature is None or mode_changed:
+            current_mode_temperature = {
+                AcMode.COOL.value: cooling,
+                AcMode.HEAT.value: heating,
+                AcMode.AUTO.value: auto,
+                AcMode.DRY.value: dry,
+            }.get(new_mode, DEFAULT_TEMPERATURE)
 
         cc = _ControlAcStatus(self._buspro)
         cc.subnet_id, cc.device_id = self._device_address
