@@ -79,3 +79,5 @@ class Switch(Device):
         scc.running_time_minutes = minutes
         scc.running_time_seconds = seconds
         await scc.send()
+        # G8: resend once if the applied SingleChannelControlResponse is lost.
+        self._start_ack_watch(scc)

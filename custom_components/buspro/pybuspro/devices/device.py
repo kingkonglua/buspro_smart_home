@@ -1,4 +1,5 @@
 ﻿import asyncio
+import random
 import time
 
 from .control import _ReadStatusOfChannels
@@ -62,6 +63,36 @@ class FrameFreshnessGuard:
         self._last_time.clear()
 
 
+# G8 -- startup read burst.  A one-shot ``_ReadStatusOfChannels`` is fragile:
+# on a full HA restart every Light/Switch schedules its read for the same fixed
+# ~3s mark, so N channels become N simultaneous UDP requests while the gateway
+# is still warming up.  Lose one (UDP/reorder/busy RS485) and that channel is
+# stuck showing its default "off" until manually operated.  The read path now
+# (a) staggers the first attempt with random jitter so the burst is spread out,
+# and (b) retries a bounded number of times with exponential backoff + jitter,
+# stopping the instant a real reading is applied (signalled by
+# ``_call_device_updated`` setting ``_got_initial_status`` -- no second state
+# path invented).  The bound keeps a genuinely dead/absent channel from polling
+# forever; a scene-triggered re-read (run_from_init=False) stays a single shot.
+_CHANNEL_STATUS_INITIAL_DELAY_SECONDS = 3.0
+_CHANNEL_STATUS_INITIAL_JITTER_SECONDS = 2.0
+_CHANNEL_STATUS_MAX_SENDS = 4  # 1 initial + up to 3 retries, then give up
+_CHANNEL_STATUS_RETRY_BASE_SECONDS = 1.0
+_CHANNEL_STATUS_RETRY_MAX_SECONDS = 4.0
+_CHANNEL_STATUS_RETRY_JITTER_SECONDS = 0.5
+
+# G8 -- control-frame ACK resend.  Same reasoning as the read burst: a busy bus
+# drops the odd command frame, leaving the load and HA out of step.  Wait this
+# long for the applied ``*Response`` (observed through
+# ``_call_device_updated``) and, only if none arrived, resend the *same*
+# absolute-level command once.  SingleChannelControl/SceneControl/
+# UniversalSwitchControl carry an absolute target state, so a resend is
+# idempotent: it re-asserts the level/scene already requested and cannot toggle
+# a load or double-apply an action.
+_ACK_TIMEOUT_SECONDS = 0.8
+_ACK_MAX_RESENDS = 1
+
+
 class Device(object):
     def __init__(self, buspro, device_address, name=""):
         # device_address = (subnet_id, device_id, ...)
@@ -78,6 +109,16 @@ class Device(object):
         # M-7: keep a strong reference so the fire-and-forget update task is
         # not garbage-collected before it runs.
         self._update_task = None
+        # G8: True once any real reading has been applied to this device (set
+        # from the shared _call_device_updated dispatch path).  Drives the
+        # startup read retry loop so it stops as soon as the channel answers.
+        self._got_initial_status = False
+        # G8: control-frame ACK watch state.  ``_ack_seq`` invalidates an older
+        # watch when a newer command is issued; ``_ack_task`` is cancelled so a
+        # device only ever has one pending resend task.
+        self._awaiting_ack = False
+        self._ack_seq = 0
+        self._ack_task = None
 
     @property
     def name(self):
@@ -133,7 +174,54 @@ class Device(object):
     # async def _send_control(self, control):
     #     await self._buspro.network_interface.send_control(control)
 
+    def _start_ack_watch(self, control):
+        """Resend ``control`` once if the applied ``*Response`` never arrives.
+
+        G8: the control path used to fire-and-forget; a dropped frame left the
+        load and HA out of step until the next manual operation.  The watch is
+        deliberately *bounded* (``_ACK_MAX_RESENDS``) and *ack-aware*: any
+        ``_call_device_updated`` (a real response was applied) clears
+        ``_awaiting_ack`` and cancels the pending resend, so a command that was
+        acknowledged is never duplicated.  Resending the same absolute-level
+        command is idempotent on the load.
+        """
+        previous = self._ack_task
+        if previous is not None and not previous.done():
+            previous.cancel()
+        self._ack_seq += 1
+        seq = self._ack_seq
+        self._awaiting_ack = True
+
+        async def _watch():
+            for _ in range(_ACK_MAX_RESENDS):
+                await asyncio.sleep(_ACK_TIMEOUT_SECONDS)
+                # A newer command, or a received status/response, superseded
+                # this one -- the ACK is no longer missing.
+                if not self._awaiting_ack or self._ack_seq != seq:
+                    return
+                try:
+                    await control.send()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001
+                    self._buspro.logger.debug(
+                        "Channel command resend failed for %s",
+                        self._device_address,
+                    )
+                    return
+
+        self._ack_task = asyncio.ensure_future(_watch())
+
     def _call_device_updated(self):
+        # G8: this is the single choke point every device uses after it has
+        # applied a real reading/response.  Use it as the "first status
+        # received" and "command acknowledged" signal rather than inventing a
+        # second dispatch path.
+        self._got_initial_status = True
+        self._awaiting_ack = False
+        previous = self._ack_task
+        if previous is not None and not previous.done():
+            previous.cancel()
         # BUG-6: device callbacks can fire before the event loop is running (or
         # after it has closed) during setup / teardown / reconnect. Scheduling a
         # coroutine then raises RuntimeError, which used to bubble out of the
@@ -160,13 +248,57 @@ class Device(object):
             )
             return
 
-        async def read_current_state_of_channels():
-            if run_from_init:
-                await asyncio.sleep(3)
-
+        async def _send_read_once():
             read_status_of_channels = _ReadStatusOfChannels(self._buspro)
-            read_status_of_channels.subnet_id, read_status_of_channels.device_id = self._device_address
-
+            read_status_of_channels.subnet_id = self._device_address[0]
+            read_status_of_channels.device_id = self._device_address[1]
             await read_status_of_channels.send()
+
+        async def read_current_state_of_channels():
+            if not run_from_init:
+                # Scene-triggered re-read: best-effort single shot, unchanged.
+                try:
+                    await _send_read_once()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001
+                    self._buspro.logger.debug(
+                        "Status read failed for %s", self._device_address
+                    )
+                return
+
+            # Startup: stagger the herd (fixed 3s + jitter), then retry -- with
+            # exponential backoff + jitter -- until a real status telegram has
+            # been applied, up to a fixed send bound so an absent channel does
+            # not poll forever.
+            await asyncio.sleep(
+                _CHANNEL_STATUS_INITIAL_DELAY_SECONDS
+                + random.uniform(0, _CHANNEL_STATUS_INITIAL_JITTER_SECONDS)
+            )
+            max_sends = max(1, _CHANNEL_STATUS_MAX_SENDS)
+            for attempt in range(max_sends):
+                if self._got_initial_status:
+                    return
+                try:
+                    await _send_read_once()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001
+                    self._buspro.logger.debug(
+                        "Startup status read failed for %s",
+                        self._device_address,
+                    )
+                if self._got_initial_status:
+                    return
+                if attempt >= max_sends - 1:
+                    return
+                backoff = min(
+                    _CHANNEL_STATUS_RETRY_BASE_SECONDS * (2 ** attempt),
+                    _CHANNEL_STATUS_RETRY_MAX_SECONDS,
+                )
+                await asyncio.sleep(
+                    backoff
+                    + random.uniform(0, _CHANNEL_STATUS_RETRY_JITTER_SECONDS)
+                )
 
         asyncio.create_task(read_current_state_of_channels())
