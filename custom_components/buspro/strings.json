@@ -109,7 +109,19 @@
           "subnet_id": "Subnet ID",
           "device_id": "Device ID",
           "subtype": "Climate type",
-          "ac_number": "AC unit number",
+          "ac_number": "AC unit / slot number",
+          "channel": "Temperature channel (ac_panel only)",
+          "name": "Name (optional)"
+        }
+      },
+      "add_scene": {
+        "title": "Add Scene",
+        "description": "Enter the target device address and the (area, scene) numbers to trigger.",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "area_number": "Area number",
+          "scene_number": "Scene number",
           "name": "Name (optional)"
         }
       },

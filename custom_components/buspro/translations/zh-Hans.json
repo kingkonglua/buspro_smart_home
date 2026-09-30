@@ -80,12 +80,48 @@
           "name": "名称（可选）"
         }
       },
-      "add_climate": {
-        "title": "添加温控器（地暖）",
-        "description": "请输入温控器设备的地址。",
+      "add_cover": {
+        "title": "添加窗帘",
+        "description": "请输入窗帘设备的地址、通道和名称。",
         "data": {
           "subnet_id": "子网 ID",
           "device_id": "设备 ID",
+          "channel": "通道 / 窗帘编号",
+          "subtype": "窗帘类型",
+          "travel_time": "全程运行时间（秒，用于位置估算）",
+          "name": "名称（可选）"
+        }
+      },
+      "add_button": {
+        "title": "添加按钮",
+        "description": "添加瞬时按钮（例如空调发射模块的一条 IR 码）。通道即万能开关编号。",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "channel": "通道 / 开关编号",
+          "name": "名称（可选）"
+        }
+      },
+      "add_climate": {
+        "title": "添加温控器",
+        "description": "请输入温控设备的地址和类型。",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "subtype": "温控类型（floor_heating / ac / ac_panel）",
+          "ac_number": "空调机号 / 面板槽位号",
+          "channel": "温度通道（仅 ac_panel）",
+          "name": "名称（可选）"
+        }
+      },
+      "add_scene": {
+        "title": "添加场景",
+        "description": "请输入目标设备地址以及要触发的（区域, 场景）编号。",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "area_number": "区域编号",
+          "scene_number": "场景编号",
           "name": "名称（可选）"
         }
       },

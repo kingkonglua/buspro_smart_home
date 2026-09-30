@@ -3,8 +3,9 @@
     "step": {
       "user": {
         "title": "HDL Buspro Gateway",
-        "description": "Enter the IP address and port number of the HDL Buspro gateway.",
+        "description": "Auto-detect HDL Buspro gateways on the local network and pick one, or enter the IP and port manually.",
         "data": {
+          "gateway_choice": "Discovered gateway IP",
           "host": "Host IP address",
           "port": "Port number"
         }
@@ -79,12 +80,48 @@
           "name": "Name (optional)"
         }
       },
-      "add_climate": {
-        "title": "Add Climate (Floor Heating)",
-        "description": "Enter the address for the climate device.",
+      "add_cover": {
+        "title": "Add Cover (Curtain)",
+        "description": "Enter the address, channel and name for the curtain device.",
         "data": {
           "subnet_id": "Subnet ID",
           "device_id": "Device ID",
+          "channel": "Channel / Curtain number",
+          "subtype": "Cover type",
+          "travel_time": "Travel time in seconds (for position estimation)",
+          "name": "Name (optional)"
+        }
+      },
+      "add_button": {
+        "title": "Add Button",
+        "description": "Add a momentary button (e.g. one IR code of the AC emitter). Channel is the universal switch number.",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "channel": "Channel / Switch number",
+          "name": "Name (optional)"
+        }
+      },
+      "add_climate": {
+        "title": "Add Climate",
+        "description": "Enter the address and type for the climate device.",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "subtype": "Climate type (floor_heating / ac / ac_panel)",
+          "ac_number": "AC unit / slot number",
+          "channel": "Temperature channel (ac_panel only)",
+          "name": "Name (optional)"
+        }
+      },
+      "add_scene": {
+        "title": "Add Scene",
+        "description": "Enter the target device address and the (area, scene) numbers to trigger.",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "area_number": "Area number",
+          "scene_number": "Scene number",
           "name": "Name (optional)"
         }
       },
