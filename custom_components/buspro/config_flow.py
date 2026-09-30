@@ -23,6 +23,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from . import get_buspro_module
 from .const import (
     DOMAIN,
     CONF_HOST,
@@ -241,7 +242,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
     def _live_hdl(self):
         """Return the connected Buspro client for this entry, or None."""
-        module = self.hass.data.get(DOMAIN)
+        module = get_buspro_module(self.hass, self.config_entry.entry_id)
         hdl = getattr(module, "hdl", None)
         if hdl is None or getattr(hdl, "network_interface", None) is None:
             return None

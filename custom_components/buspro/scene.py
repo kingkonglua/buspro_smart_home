@@ -16,7 +16,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import DATA_BUSPRO
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -40,7 +39,7 @@ async def async_setup_entry(
     # noinspection PyUnresolvedReferences
     from .pybuspro.devices.scene import Scene
 
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -66,7 +65,7 @@ async def async_setup_entry(
             name, area_number, scene_number, device_address,
         )
         entities.append(
-            BusproScene(hass, pybuspro_scene, name, device_key)
+            BusproScene(hass, pybuspro_scene, name, device_key, buspro_module)
         )
 
     async_add_entities(entities)
@@ -75,17 +74,17 @@ async def async_setup_entry(
 class BusproScene(SceneEntity):
     """Representation of an HDL Buspro scene."""
 
-    def __init__(self, hass, scene, name, unique_key):
+    def __init__(self, hass, scene, name, unique_key, module=None):
         self._hass = hass
         self._scene = scene
         self._attr_name = name
         self._attr_unique_id = f"buspro_{unique_key}"
+        self._module = module
 
     @property
     def available(self) -> bool:
-        """Return True while the gateway connection is up."""
-        module = self._hass.data.get(DATA_BUSPRO)
-        return bool(module and module.connected)
+        """Return True while this scene's own gateway connection is up."""
+        return bool(self._module is not None and self._module.connected)
 
     async def async_activate(self, **kwargs) -> None:
         """Activate the HDL scene."""

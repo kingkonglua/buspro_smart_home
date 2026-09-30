@@ -15,7 +15,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import DATA_BUSPRO
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -35,7 +34,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Buspro button devices from a config entry."""
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -57,7 +56,8 @@ async def async_setup_entry(
 
         entities.append(
             BusproButton(
-                hass, hdl, device_address, switch_number, name, device_key
+                hass, hdl, device_address, switch_number, name, device_key,
+                buspro_module
             )
         )
 
@@ -68,9 +68,11 @@ async def async_setup_entry(
 class BusproButton(ButtonEntity):
     """Representation of a Buspro momentary universal switch button."""
 
-    def __init__(self, hass, hdl, device_address, switch_number, name, unique_id):
+    def __init__(self, hass, hdl, device_address, switch_number, name, unique_id,
+                 module=None):
         self._hass = hass
         self._hdl = hdl
+        self._module = module
         self._device_address = device_address
         self._switch_number = switch_number
         self._attr_name = name
@@ -80,7 +82,7 @@ class BusproButton(ButtonEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        return self._hass.data[DATA_BUSPRO].connected
+        return bool(self._module is not None and self._module.connected)
 
     async def async_press(self):
         """Send one momentary pulse to the universal switch output."""

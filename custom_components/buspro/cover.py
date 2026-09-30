@@ -29,7 +29,6 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import DATA_BUSPRO
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -89,7 +88,7 @@ async def async_setup_entry(
 
         entities.append(
             BusproCover(
-                hass, curtain, subtype, travel_time
+                hass, curtain, subtype, travel_time, buspro_module
             )
         )
 
@@ -100,9 +99,10 @@ async def async_setup_entry(
 class BusproCover(CoverEntity):
     """Representation of a Buspro cover (curtain) device."""
 
-    def __init__(self, hass, device, subtype, travel_time):
+    def __init__(self, hass, device, subtype, travel_time, module=None):
         self._hass = hass
         self._device = device
+        self._module = module
         self._subtype = subtype
         self._travel_time = travel_time if travel_time and travel_time > 0 else None
 
@@ -305,7 +305,7 @@ class BusproCover(CoverEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        return self._hass.data[DATA_BUSPRO].connected
+        return bool(self._module is not None and self._module.connected)
 
     @property
     def unique_id(self):

@@ -13,7 +13,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 
-from . import DATA_BUSPRO
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -44,7 +43,7 @@ async def async_setup_entry(
     # noinspection PyUnresolvedReferences
     from .pybuspro.devices import Sensor
 
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -87,7 +86,11 @@ async def async_setup_entry(
             name=name,
         )
 
-        entities.append(BusproBinarySensor(hass, sensor, sensor_type, None, channel))
+        entities.append(
+            BusproBinarySensor(
+                hass, sensor, sensor_type, None, channel, module=buspro_module
+            )
+        )
 
     async_add_entities(entities)
 
@@ -96,12 +99,14 @@ async def async_setup_entry(
 class BusproBinarySensor(BinarySensorEntity):
     """Representation of a Buspro binary sensor."""
 
-    def __init__(self, hass, device, sensor_type, device_class, channel=None):
+    def __init__(self, hass, device, sensor_type, device_class, channel=None,
+                 module=None):
         self._hass = hass
         self._device = device
         self._device_class = device_class
         self._sensor_type = sensor_type
         self._channel = channel
+        self._module = module
         self.async_register_callbacks()
 
     @callback
@@ -132,7 +137,7 @@ class BusproBinarySensor(BinarySensorEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        return self._hass.data[DATA_BUSPRO].connected
+        return bool(self._module is not None and self._module.connected)
 
     @property
     def device_class(self):

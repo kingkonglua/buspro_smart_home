@@ -13,7 +13,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 
-from . import DATA_BUSPRO
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -36,7 +35,7 @@ async def async_setup_entry(
     # noinspection PyUnresolvedReferences
     from .pybuspro.devices import Switch
 
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -57,7 +56,7 @@ async def async_setup_entry(
         )
 
         switch = Switch(hdl, device_address, channel, name)
-        entities.append(BusproSwitch(hass, switch))
+        entities.append(BusproSwitch(hass, switch, buspro_module))
 
     async_add_entities(entities)
 
@@ -66,9 +65,10 @@ async def async_setup_entry(
 class BusproSwitch(SwitchEntity):
     """Representation of a Buspro switch."""
 
-    def __init__(self, hass, device):
+    def __init__(self, hass, device, module=None):
         self._hass = hass
         self._device = device
+        self._module = module
         self.async_register_callbacks()
 
     @callback
@@ -95,7 +95,7 @@ class BusproSwitch(SwitchEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        return self._hass.data[DATA_BUSPRO].connected
+        return bool(self._module is not None and self._module.connected)
 
     @property
     def is_on(self):

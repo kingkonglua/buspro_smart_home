@@ -29,6 +29,33 @@ _LOGGER = logging.getLogger(__name__)
 DATA_BUSPRO = "buspro"
 DEPENDENCIES = []
 
+
+class BusproData(dict):
+    """Per-entry BusproModule registry.
+
+    Stored under ``hass.data[DOMAIN]`` keyed by config-entry id so that more
+    than one gateway can coexist. Attribute access is proxied to the first
+    registered module for backward compatibility with the older single-entry
+    access pattern (``hass.data[DOMAIN].connected`` etc.).
+    """
+
+    def __getattr__(self, item):
+        for module in self.values():
+            return getattr(module, item)
+        raise AttributeError(item)
+
+
+def get_buspro_module(hass, entry_id=None):
+    """Return the BusproModule for entry_id, or the first known one."""
+    bucket = hass.data.get(DOMAIN)
+    if isinstance(bucket, dict):
+        if entry_id is not None:
+            return bucket.get(entry_id)
+        for module in bucket.values():
+            return module
+        return None
+    return bucket
+
 DEFAULT_SCENE_NAME = "BUSPRO SCENE"
 DEFAULT_SEND_MESSAGE_NAME = "BUSPRO MESSAGE"
 
@@ -75,7 +102,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     await buspro_module.start()
     buspro_module.register_services()
 
-    hass.data[DOMAIN] = buspro_module
+    # M-8: key modules by entry id so a second gateway does not replace the
+    # first. Migrate a legacy single-module value if present.
+    if not isinstance(hass.data.get(DOMAIN), BusproData):
+        hass.data[DOMAIN] = BusproData()
+    hass.data[DOMAIN][config_entry.entry_id] = buspro_module
 
     # Forward setup to all platforms
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
@@ -100,17 +131,26 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     )
 
     if unload_ok:
-        for service in (
-            SERVICE_BUSPRO_ACTIVATE_SCENE,
-            SERVICE_BUSPRO_SEND_MESSAGE,
-            SERVICE_BUSPRO_UNIVERSAL_SWITCH,
-        ):
-            if hass.services.has_service(DOMAIN, service):
-                hass.services.async_remove(DOMAIN, service)
+        # M-8: remove only this entry's module; keep the others (and their
+        # services) alive. Drop the services once the last entry is gone.
+        bucket = hass.data.get(DOMAIN)
+        if isinstance(bucket, dict):
+            buspro_module = bucket.pop(config_entry.entry_id, None)
+        else:
+            buspro_module = bucket
+            hass.data.pop(DOMAIN, None)
 
-        buspro_module = hass.data.pop(DOMAIN, None)
         if buspro_module:
             await buspro_module.stop()
+
+        if not hass.data.get(DOMAIN):
+            for service in (
+                SERVICE_BUSPRO_ACTIVATE_SCENE,
+                SERVICE_BUSPRO_SEND_MESSAGE,
+                SERVICE_BUSPRO_UNIVERSAL_SWITCH,
+            ):
+                if hass.services.has_service(DOMAIN, service):
+                    hass.services.async_remove(DOMAIN, service)
 
     return unload_ok
 
@@ -141,6 +181,7 @@ class BusproModule:
     # noinspection PyUnusedLocal
     async def stop(self, event=None):
         """Stop Buspro object. Disconnect from tunneling device."""
+        self.connected = False
         await self.hdl.stop()
 
     async def service_activate_scene(self, call):
@@ -180,7 +221,9 @@ class BusproModule:
             await universal_switch.set_off()
 
     def register_services(self):
-        """Register HDL Buspro services."""
+        """Register HDL Buspro services (idempotent across entries)."""
+        if self.hass.services.has_service(DOMAIN, SERVICE_BUSPRO_ACTIVATE_SCENE):
+            return
 
         """ activate_scene """
         self.hass.services.async_register(

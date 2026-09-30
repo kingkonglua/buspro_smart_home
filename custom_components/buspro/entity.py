@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from homeassistant.helpers.entity import Entity
 
-from . import DATA_BUSPRO
-
 
 class BusproEntityMixin:
     """Mixin wiring an HA entity to a pybuspro device object.
@@ -27,9 +25,10 @@ class BusproEntityMixin:
 
     _attr_should_poll = False
 
-    def _buspro_init_device(self, hass, device):
+    def _buspro_init_device(self, hass, device, module=None):
         """Store the device and register the update callback."""
         self._hass = hass
+        self._module = module
         self._device = device
         identifier = getattr(device, "device_identifier", None)
         if identifier is not None:
@@ -51,9 +50,8 @@ class BusproEntityMixin:
 
     @property
     def available(self) -> bool:
-        """Return True while the gateway connection is up."""
-        module = self._hass.data.get(DATA_BUSPRO)
-        return bool(module and module.connected)
+        """Return True while this entity's own gateway connection is up."""
+        return bool(self._module is not None and self._module.connected)
 
     @property
     def name(self):
@@ -64,6 +62,6 @@ class BusproEntityMixin:
 class BusproEntity(BusproEntityMixin, Entity):
     """Standalone Buspro entity backed by a pybuspro device."""
 
-    def __init__(self, hass, device):
+    def __init__(self, hass, device, module=None):
         """Initialize the entity for a pybuspro device."""
-        self._buspro_init_device(hass, device)
+        self._buspro_init_device(hass, device, module)

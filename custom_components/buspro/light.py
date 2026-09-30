@@ -17,7 +17,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 
-from . import DATA_BUSPRO
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -42,7 +41,7 @@ async def async_setup_entry(
     # noinspection PyUnresolvedReferences
     from .pybuspro.devices import Light
 
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -63,7 +62,9 @@ async def async_setup_entry(
         )
 
         light = Light(hdl, device_address, channel, name)
-        entities.append(BusproLight(hass, light, dimmable=True))
+        entities.append(
+            BusproLight(hass, light, dimmable=True, module=buspro_module)
+        )
 
     async_add_entities(entities)
 
@@ -72,10 +73,11 @@ async def async_setup_entry(
 class BusproLight(LightEntity):
     """Representation of a Buspro light."""
 
-    def __init__(self, hass, device, dimmable):
+    def __init__(self, hass, device, dimmable, module=None):
         self._hass = hass
         self._device = device
         self._dimmable = dimmable
+        self._module = module
         self._attr_color_mode = ColorMode.BRIGHTNESS
         self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
         self.async_register_callbacks()
@@ -104,7 +106,7 @@ class BusproLight(LightEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        return self._hass.data[DATA_BUSPRO].connected
+        return bool(self._module is not None and self._module.connected)
 
     @property
     def brightness(self):

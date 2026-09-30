@@ -30,7 +30,6 @@ from .pybuspro.devices.climate import ControlFloorHeatingStatus
 # noinspection PyUnresolvedReferences
 from .pybuspro.helpers.enums import OnOffStatus, AcMode, AcFanSpeed
 
-from . import DATA_BUSPRO
 from .entity import BusproEntityMixin
 from .const import (
     DOMAIN,
@@ -110,7 +109,7 @@ async def async_setup_entry(
     # noinspection PyUnresolvedReferences
     from .pybuspro.devices import Climate, AC, PanelAirConditioner
 
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -134,7 +133,7 @@ async def async_setup_entry(
             )
 
             ac = AC(hdl, device_address, ac_number, name)
-            entities.append(BusproACClimate(hass, ac))
+            entities.append(BusproACClimate(hass, ac, buspro_module))
         elif subtype == CLIMATE_SUBTYPE_AC_PANEL:
             # Touch-panel AC page: ac_number = panel AC slot, channel = the
             # panel channel that carries its room-temperature reading.
@@ -150,7 +149,7 @@ async def async_setup_entry(
             panel_ac = PanelAirConditioner(
                 hdl, device_address, ac_number, temperature_channel, name
             )
-            entities.append(BusproPanelACClimate(hass, panel_ac))
+            entities.append(BusproPanelACClimate(hass, panel_ac, buspro_module))
         else:
             _LOGGER.debug(
                 "Adding floor heating climate '%s' with address %s",
@@ -162,7 +161,9 @@ async def async_setup_entry(
             # Default preset modes
             preset_modes = [PRESET_HOME, PRESET_SLEEP, PRESET_AWAY]
 
-            entities.append(BusproClimate(hass, climate, preset_modes, None))
+            entities.append(
+                BusproClimate(hass, climate, preset_modes, None, buspro_module)
+            )
 
     async_add_entities(entities)
 
@@ -171,9 +172,10 @@ async def async_setup_entry(
 class BusproClimate(ClimateEntity):
     """Representation of a Buspro floor heating climate device."""
 
-    def __init__(self, hass, device, preset_modes, relay_sensor):
+    def __init__(self, hass, device, preset_modes, relay_sensor, module=None):
         self._hass = hass
         self._device = device
+        self._module = module
         self._target_temperature = self._device.target_temperature
         self._is_on = self._device.is_on
         self._preset_modes = preset_modes
@@ -244,7 +246,7 @@ class BusproClimate(ClimateEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        return self._hass.data[DATA_BUSPRO].connected
+        return bool(self._module is not None and self._module.connected)
 
     @property
     def temperature_unit(self):
@@ -388,9 +390,10 @@ class BusproClimate(ClimateEntity):
 class BusproACClimate(ClimateEntity):
     """Representation of a Buspro directly connected AC climate device."""
 
-    def __init__(self, hass, device):
+    def __init__(self, hass, device, module=None):
         self._hass = hass
         self._device = device
+        self._module = module
 
         self._enable_turn_on_off_backwards_compatibility = False
         self._attr_supported_features = (
@@ -458,8 +461,7 @@ class BusproACClimate(ClimateEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        module = self._hass.data[DATA_BUSPRO]
-        return bool(module.connected) and self._device.available
+        return bool(self._module is not None and self._module.connected) and self._device.available
 
     @property
     def unique_id(self):
@@ -561,8 +563,8 @@ class BusproACClimate(ClimateEntity):
 class BusproPanelACClimate(BusproEntityMixin, ClimateEntity):
     """Buspro AC driven from a touch panel's AC page (Enviro / Granite)."""
 
-    def __init__(self, hass, device):
-        self._buspro_init_device(hass, device)
+    def __init__(self, hass, device, module=None):
+        self._buspro_init_device(hass, device, module)
 
         self._enable_turn_on_off_backwards_compatibility = False
         self._attr_supported_features = (
@@ -580,8 +582,7 @@ class BusproPanelACClimate(BusproEntityMixin, ClimateEntity):
     @property
     def available(self) -> bool:
         """Available once the panel has reported the slot and the link is up."""
-        module = self._hass.data.get(DATA_BUSPRO)
-        return bool(module and module.connected) and self._device.available
+        return bool(self._module is not None and self._module.connected) and self._device.available
 
     @property
     def temperature_unit(self):

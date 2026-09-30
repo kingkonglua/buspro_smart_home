@@ -17,7 +17,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.core import HomeAssistant
 
-from . import DATA_BUSPRO
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -40,7 +39,7 @@ async def async_setup_entry(
     # noinspection PyUnresolvedReferences
     from .pybuspro.devices import Sensor
 
-    buspro_module = hass.data[DOMAIN]
+    buspro_module = hass.data[DOMAIN][config_entry.entry_id]
     hdl = buspro_module.hdl
     devices = config_entry.options.get(CONF_DEVICES, {})
     entities = []
@@ -61,7 +60,7 @@ async def async_setup_entry(
         )
 
         sensor = Sensor(hdl, device_address, name=name)
-        entities.append(BusproSensor(hass, sensor, sensor_type))
+        entities.append(BusproSensor(hass, sensor, sensor_type, buspro_module))
 
     async_add_entities(entities)
 
@@ -70,10 +69,11 @@ async def async_setup_entry(
 class BusproSensor(SensorEntity):
     """Representation of a Buspro sensor."""
 
-    def __init__(self, hass, device, sensor_type):
+    def __init__(self, hass, device, sensor_type, module=None):
         self._hass = hass
         self._device = device
         self._sensor_type = sensor_type
+        self._module = module
         self._temperature = None
         self._brightness = None
         self._received = False
@@ -110,7 +110,7 @@ class BusproSensor(SensorEntity):
     @property
     def available(self):
         """Return True if entity is available."""
-        connected = self._hass.data[DATA_BUSPRO].connected
+        connected = bool(self._module is not None and self._module.connected)
         if not connected:
             return False
 
