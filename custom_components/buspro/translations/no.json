@@ -152,10 +152,22 @@
       "no_devices_found": "Ingen enheter funnet. Sjekk gateway-konfigurasjonen og bussforbindelsen."
     },
     "error": {
-      "unknown": "En feil oppstod."
+      "unknown": "En feil oppstod.",
+      "already_exists": "Enheten {device_key} finnes allerede og kan ikke legges til på nytt.",
+      "gateway_unavailable": "Gatewayen er utilgjengelig, kan ikke fortsette."
     }
   },
   "options": {
+    "progress": {
+      "bus_scan": {
+        "title": "Skanner buss...",
+        "description": "Sender forespørsler til bussen og samler enhetssvar, vent litt."
+      },
+      "bus_scan_confirming": {
+        "title": "Bekrefter enheter...",
+        "description": "Verifiserer skannede enhetsdata, vent litt."
+      }
+    },
     "error": {
       "already_exists": "Enheten {device_key} finnes allerede og kan ikke legges til på nytt.",
       "gateway_unavailable": "Gatewayen er utilgjengelig, kan ikke fortsette."
