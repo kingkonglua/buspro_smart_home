@@ -6,14 +6,14 @@ activate_scene:
       name: Address
       description: Device address (subnet id, device id).
       required: true
-      example: "[1, 42]"
+      example: [1, 42]
       selector:
         object:
     scene_address:
       name: Scene address
       description: Scene number to activate.
       required: true
-      example: "[1, 1]"
+      example: [1, 1]
       selector:
         object:
 
@@ -25,21 +25,21 @@ send_message:
       name: Address
       description: Device address (subnet id, device id).
       required: true
-      example: "[1, 42]"
+      example: [1, 42]
       selector:
         object:
     operate_code:
       name: Operate code
       description: Operate code.
       required: true
-      example: "[1, 1]"
+      example: [1, 1]
       selector:
         object:
     payload:
       name: Payload
       description: Payload to send.
       required: true
-      example: "[1, 100]"
+      example: [1, 100]
       selector:
         object:
 
@@ -51,7 +51,7 @@ set_universal_switch:
       name: Address
       description: Device address (subnet id, device id).
       required: true
-      example: "[1, 42]"
+      example: [1, 42]
       selector:
         object:
     switch_number:

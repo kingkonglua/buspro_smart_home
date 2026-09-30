@@ -5,6 +5,7 @@ For more details about this component, please refer to the documentation at
 https://home-assistant.io/...
 """
 
+import ast
 import asyncio
 import inspect
 import logging
@@ -87,24 +88,106 @@ SERVICE_BUSPRO_ATTR_SCENE_ADDRESS = "scene_address"
 SERVICE_BUSPRO_ATTR_SWITCH_NUMBER = "switch_number"
 SERVICE_BUSPRO_ATTR_STATUS = "status"
 
+# BUG-8: the HA UI ``object:`` selector emits a *dict* while the handlers
+# unpack a plain list (``subnet_id, device_id = self._device_address``) and the
+# schemas below require a list of ints. Normalise every accepted shape in one
+# place rather than in each of the three handlers.
+_ADDRESS_KEY_ORDER = (
+    "subnet_id",
+    "subnet",
+    "device_id",
+    "device",
+    "scene_address",
+    "scene_id",
+    "scene",
+    "operate_code",
+    "payload",
+)
+
+
+def _address_key_rank(key):
+    """Return the canonical position of a named address key, or None."""
+    text = str(key).lower()
+    for index, name in enumerate(_ADDRESS_KEY_ORDER):
+        if name in text:
+            return index
+    return None
+
+
+def _normalize_int_list(value):
+    """Coerce a UI object-selector value into a list of ints.
+
+    Accepts the documented list form (``[1, 42]``) unchanged, converts a dict
+    produced by the UI ``object:`` selector (``{"subnet_id": 1,
+    "device_id": 42}`` or ``{"0": 1, "1": 42}``) into an ordered list, and
+    parses the previously documented stringified list (``"[1, 42]"``).
+    An empty dict means the user left the field blank and normalises to ``[]``.
+    """
+    if isinstance(value, str):
+        try:
+            value = ast.literal_eval(value)
+        except (ValueError, SyntaxError, TypeError) as err:
+            raise vol.Invalid(
+                f"expected a list, got unparsable string {value!r}"
+            ) from err
+
+    if isinstance(value, dict):
+        if not value:
+            return []
+        keys = list(value)
+        if all(str(key).lstrip("-").isdigit() for key in keys):
+            return [value[key] for key in sorted(keys, key=lambda k: int(k))]
+        ranked = []
+        for key in keys:
+            rank = _address_key_rank(key)
+            if rank is None:
+                raise vol.Invalid(f"unexpected key {key!r} in address mapping")
+            ranked.append((rank, key))
+        return [value[key] for _, key in sorted(ranked)]
+
+    if isinstance(value, (list, tuple)):
+        return list(value)
+
+    raise vol.Invalid(f"expected a list, got {type(value).__name__}")
+
+
+def _normalize_int(value):
+    """Unwrap a single-element list/tuple to a scalar for number fields.
+
+    The UI editor and generic callers sometimes box scalars as ``[1]``; unwrap
+    so ``switch_number``/``status`` still reach the handler as plain ints.
+    """
+    if isinstance(value, (list, tuple)) and len(value) == 1:
+        return value[0]
+    return value
+
+
 """{ "address": [1,74], "scene_address": [3,5] }"""
 SERVICE_BUSPRO_ACTIVATE_SCENE_SCHEMA = vol.Schema({
-    vol.Required(SERVICE_BUSPRO_ATTR_ADDRESS): vol.Any([cv.positive_int]),
-    vol.Required(SERVICE_BUSPRO_ATTR_SCENE_ADDRESS): vol.Any([cv.positive_int]),
+    vol.Required(SERVICE_BUSPRO_ATTR_ADDRESS): vol.All(
+        _normalize_int_list, vol.Any([cv.positive_int])),
+    vol.Required(SERVICE_BUSPRO_ATTR_SCENE_ADDRESS): vol.All(
+        _normalize_int_list, vol.Any([cv.positive_int])),
 })
 
 """{ "address": [1,74], "operate_code": [4,12], "payload": [1,75,0,3] }"""
 SERVICE_BUSPRO_SEND_MESSAGE_SCHEMA = vol.Schema({
-    vol.Required(SERVICE_BUSPRO_ATTR_ADDRESS): vol.Any([cv.positive_int]),
-    vol.Required(SERVICE_BUSPRO_ATTR_OPERATE_CODE): vol.Any([cv.positive_int]),
-    vol.Required(SERVICE_BUSPRO_ATTR_PAYLOAD): vol.Any([cv.positive_int]),
+    vol.Required(SERVICE_BUSPRO_ATTR_ADDRESS): vol.All(
+        _normalize_int_list, vol.Any([cv.positive_int])),
+    vol.Required(SERVICE_BUSPRO_ATTR_OPERATE_CODE): vol.All(
+        _normalize_int_list, vol.Any([cv.positive_int])),
+    vol.Required(SERVICE_BUSPRO_ATTR_PAYLOAD): vol.All(
+        _normalize_int_list, vol.Any([cv.positive_int])),
 })
 
 """{ "address": [1,100], "switch_number": 100, "status": 1 }"""
 SERVICE_BUSPRO_UNIVERSAL_SWITCH_SCHEMA = vol.Schema({
-    vol.Required(SERVICE_BUSPRO_ATTR_ADDRESS): vol.Any([cv.positive_int]),
-    vol.Required(SERVICE_BUSPRO_ATTR_SWITCH_NUMBER): vol.Any(cv.positive_int),
-    vol.Required(SERVICE_BUSPRO_ATTR_STATUS): vol.Any(cv.positive_int),
+    vol.Required(SERVICE_BUSPRO_ATTR_ADDRESS): vol.All(
+        _normalize_int_list, vol.Any([cv.positive_int])),
+    vol.Required(SERVICE_BUSPRO_ATTR_SWITCH_NUMBER): vol.All(
+        _normalize_int, vol.Any(cv.positive_int)),
+    vol.Required(SERVICE_BUSPRO_ATTR_STATUS): vol.All(
+        _normalize_int, vol.Any(cv.positive_int)),
 })
 
 PLATFORMS = ["light", "switch", "binary_sensor", "sensor", "climate", "cover", "button", "scene"]
