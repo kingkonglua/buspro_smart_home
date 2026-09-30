@@ -165,22 +165,33 @@ class BusproCover(CoverEntity):
         #   status == 2 (CURTAIN_CLOSE): curtain physically closed (at closed limit)
         #   status == 1 (CURTAIN_OPEN) : curtain physically open (at open limit)
         #   status == 0 (CURTAIN_STOP) : stopped / parked in a middle position
-        if status == CURTAIN_STOP:
+        if status == CURTAIN_OPEN or status == CURTAIN_CLOSE:
+            # A limit report is absolute ground truth, NOT the start of a new
+            # movement: snap the position to 100 (open) / 0 (closed) and make
+            # sure we are not shown as still moving.
+            if self._stop_task is not None:
+                self._stop_task.cancel()
+                self._stop_task = None
+            self._direction = None
+            self._start_time = None
+            self._position_at_start = None
+            if self._supports_position:
+                self._fixed_position = 100 if status == CURTAIN_OPEN else 0
+            self._attr_is_opening = False
+            self._attr_is_closing = False
+        elif status == CURTAIN_STOP:
             # Motor stopped (limit reached or stop command) - fix the position
             if self._direction is not None or self._stop_task is not None:
                 self._fix_position()
-            elif self._fixed_position is not None:
-                # Re-confirm stopped state from external control
-                pass
-        elif status == CURTAIN_OPEN and self._direction is None:
-            # Bus reports the curtain is opening (e.g. controlled elsewhere)
-            self._start_movement(1)
-        elif status == CURTAIN_CLOSE and self._direction is None:
-            # Bus reports the curtain is closing (status==2 => physically closed)
-            self._start_movement(-1)
-
-        self._attr_is_opening = self._device.is_moving and not self._device.is_closed
-        self._attr_is_closing = self._device.is_moving and self._device.is_closed
+            self._attr_is_opening = False
+            self._attr_is_closing = False
+        else:
+            self._attr_is_opening = (
+                self._device.is_moving and not self._device.is_closed
+            )
+            self._attr_is_closing = (
+                self._device.is_moving and self._device.is_closed
+            )
 
         if self._supports_position and self._direction is None:
             self._attr_is_closed = self._fixed_position is not None and self._fixed_position <= 0
@@ -196,6 +207,10 @@ class BusproCover(CoverEntity):
         self._direction = direction
         self._position_at_start = float(self._fixed_position)
         self._start_time = time.monotonic()
+        # Optimistic flags: the bus may not confirm the movement, but HA should
+        # immediately show "opening"/"closing" after the user pressed the button.
+        self._attr_is_opening = direction > 0
+        self._attr_is_closing = direction < 0
 
     def _estimate_position(self):
         """Estimate the current position (0 closed, 100 open) from travel time."""

@@ -66,7 +66,9 @@ class AC(Device):
             self._call_device_updated()
 
     def _apply_status_payload(self, payload):
-        if len(payload) < 13:
+        # A missing (None) / empty frame must never raise: the gateway drops
+        # packets and devices go offline. Keep the last known state instead.
+        if not payload or len(payload) < 13:
             return
         # Filter messages for our AC unit only (when more than one unit is present)
         ac_number = payload[0]
