@@ -11,6 +11,9 @@ class Device(object):
         self._buspro = buspro
         self._name = name
         self.device_updated_cbs = []
+        # M-7: keep a strong reference so the fire-and-forget update task is
+        # not garbage-collected before it runs.
+        self._update_task = None
 
     @property
     def name(self):
@@ -47,7 +50,7 @@ class Device(object):
     #     await self._buspro.network_interface.send_control(control)
 
     def _call_device_updated(self):
-        asyncio.create_task(self._device_updated())
+        self._update_task = asyncio.ensure_future(self._device_updated())
 
     def _call_read_current_status_of_channels(self, run_from_init=False):
 

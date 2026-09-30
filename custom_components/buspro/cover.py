@@ -250,7 +250,15 @@ class BusproCover(CoverEntity):
             if self._hass is not None:
                 self.async_write_ha_state()
 
-        self._stop_task = asyncio.create_task(delayed_stop())
+        # M-7: create the task through HA so its lifecycle is tracked and it is
+        # cancelled if the entry/entity is unloaded before the delay elapses.
+        self._stop_task = self._hass.async_create_task(delayed_stop())
+
+    async def async_will_remove_from_hass(self):
+        """Cancel any pending delayed-stop task (M-7)."""
+        if self._stop_task is not None:
+            self._stop_task.cancel()
+            self._stop_task = None
 
     @property
     def should_poll(self):
