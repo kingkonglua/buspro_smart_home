@@ -82,6 +82,11 @@ class BusproScene(SceneEntity):
         self._module = module
 
     @property
+    def name(self):
+        """Return the display name of this scene entity."""
+        return self._attr_name
+
+    @property
     def available(self) -> bool:
         """Return True while this scene's own gateway connection is up."""
         return bool(self._module is not None and self._module.connected)

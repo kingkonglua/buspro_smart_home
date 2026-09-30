@@ -41,6 +41,7 @@ from .const import (
     CONF_AC_NUMBER,
     CONF_CHANNEL,
     DEVICE_TYPE_CLIMATE,
+    coerce_int,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -118,14 +119,16 @@ async def async_setup_entry(
         if device_config[CONF_DEVICE_TYPE] != DEVICE_TYPE_CLIMATE:
             continue
 
-        subnet_id = device_config[CONF_SUBNET_ID]
-        device_id = device_config[CONF_DEVICE_ID]
+        subnet_id = coerce_int(device_config[CONF_SUBNET_ID], CONF_SUBNET_ID)
+        device_id = coerce_int(device_config[CONF_DEVICE_ID], CONF_DEVICE_ID)
         subtype = device_config.get(CONF_SUBTYPE, CLIMATE_SUBTYPE_FLOOR_HEATING)
         name = device_config.get("name", f"Climate {subnet_id}-{device_id}")
         device_address = (subnet_id, device_id)
 
         if subtype == CLIMATE_SUBTYPE_AC:
-            ac_number = device_config.get(CONF_AC_NUMBER, 1)
+            ac_number = coerce_int(
+                device_config.get(CONF_AC_NUMBER, 1), CONF_AC_NUMBER
+            )
 
             _LOGGER.debug(
                 "Adding AC climate '%s' with address %s, ac_number %s",
@@ -137,8 +140,12 @@ async def async_setup_entry(
         elif subtype == CLIMATE_SUBTYPE_AC_PANEL:
             # Touch-panel AC page: ac_number = panel AC slot, channel = the
             # panel channel that carries its room-temperature reading.
-            ac_number = device_config.get(CONF_AC_NUMBER, 1)
-            temperature_channel = device_config.get(CONF_CHANNEL, 1)
+            ac_number = coerce_int(
+                device_config.get(CONF_AC_NUMBER, 1), CONF_AC_NUMBER
+            )
+            temperature_channel = coerce_int(
+                device_config.get(CONF_CHANNEL, 1), CONF_CHANNEL
+            )
 
             _LOGGER.debug(
                 "Adding panel AC climate '%s' with address %s, slot %s, "

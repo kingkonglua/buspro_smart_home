@@ -39,6 +39,7 @@ from .const import (
     CONF_SUBTYPE,
     CONF_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
+    coerce_int,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,6 +51,31 @@ COVER_SUBTYPE_BUS_MOTOR = "bus_motor"
 CURTAIN_STOP = 0   # stopped / parked in a middle position
 CURTAIN_OPEN = 1   # curtain physically open (at open limit)
 CURTAIN_CLOSE = 2  # curtain physically closed (at closed limit)
+
+
+def _coerce_travel_time(value):
+    """Normalise a cover ``travel_time`` config value.
+
+    Numeric values pass through (floats are truncated).  ``None`` and values
+    ``<= 0`` disable travel-time position estimation.  Anything else -- e.g. a
+    string typed by the user -- is rejected with a descriptive error instead of
+    raising a raw TypeError like ``'>' not supported between str and int``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        value = int(value)
+    if isinstance(value, (int, float)):
+        try:
+            seconds = int(value)
+        except (ValueError, OverflowError) as err:
+            raise ValueError(
+                f"travel_time must be a finite number, got {value!r}"
+            ) from err
+        return seconds if seconds > 0 else None
+    raise ValueError(
+        f"travel_time must be a number, got {type(value).__name__} {value!r}"
+    )
 
 
 async def async_setup_entry(
@@ -70,11 +96,13 @@ async def async_setup_entry(
         if device_config[CONF_DEVICE_TYPE] != DEVICE_TYPE_COVER:
             continue
 
-        subnet_id = device_config[CONF_SUBNET_ID]
-        device_id = device_config[CONF_DEVICE_ID]
-        channel = device_config[CONF_CHANNEL]
+        subnet_id = coerce_int(device_config[CONF_SUBNET_ID], CONF_SUBNET_ID)
+        device_id = coerce_int(device_config[CONF_DEVICE_ID], CONF_DEVICE_ID)
+        channel = coerce_int(device_config[CONF_CHANNEL], CONF_CHANNEL)
         subtype = device_config.get(CONF_SUBTYPE, COVER_SUBTYPE_CURTAIN_MODULE)
-        travel_time = device_config.get(CONF_TRAVEL_TIME, 15)
+        travel_time = _coerce_travel_time(
+            device_config.get(CONF_TRAVEL_TIME, 15)
+        )
         name = device_config.get("name", f"Cover {subnet_id}-{device_id}-{channel}")
         device_address = (subnet_id, device_id)
 
@@ -104,7 +132,9 @@ class BusproCover(CoverEntity):
         self._device = device
         self._module = module
         self._subtype = subtype
-        self._travel_time = travel_time if travel_time and travel_time > 0 else None
+        # Normalise again here so a directly-constructed entity (and any future
+        # caller) can never compare a str against an int.
+        self._travel_time = _coerce_travel_time(travel_time)
 
         # Position tracking (travel time estimation), only for bus motors
         self._supports_position = (

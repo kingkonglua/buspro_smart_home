@@ -254,6 +254,7 @@ class BusproModule:
         self.hass = hass
         self.connected = False
         self.hdl = None
+        self._stop_listener_unsub = None
         self.gateway_address_send_receive = ((host, port), ('', port))
         self.init_hdl()
 
@@ -266,13 +267,21 @@ class BusproModule:
     async def start(self):
         """Start Buspro object. Connect to tunneling device."""
         await self.hdl.start(state_updater=False)
-        self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self.stop)
+        # Keep the unsubscribe callback so the one-shot HA-stop listener does
+        # not survive an unload/reload of this config entry (residual state).
+        self._stop_listener_unsub = self.hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STOP, self.stop
+        )
         self.connected = True
 
     # noinspection PyUnusedLocal
     async def stop(self, event=None):
         """Stop Buspro object. Disconnect from tunneling device."""
         self.connected = False
+        unsub = getattr(self, "_stop_listener_unsub", None)
+        if unsub is not None:
+            self._stop_listener_unsub = None
+            unsub()
         await self.hdl.stop()
 
     def register_services(self):

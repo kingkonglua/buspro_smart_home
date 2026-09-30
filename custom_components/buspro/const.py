@@ -89,3 +89,22 @@ CLIMATE_SUBTYPES = [
 # cover/subtype=curtain_module.
 DEVICE_TYPE_AC = "ac"
 DEVICE_TYPE_CURTAIN = "curtain"
+
+
+def coerce_int(value, field):
+    """Coerce a config-entry numeric field to ``int``.
+
+    Config entries can be hand-edited or migrated from an older version, so a
+    numeric field (subnet/device/channel/ac_number/...) may arrive as a string.
+    Using it directly in arithmetic or byte-building later raises an opaque
+    ``TypeError``; normalise here and report anything unusable.  Numeric strings
+    such as ``"15"`` are accepted, non-numeric values raise a clear error.
+    """
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError) as err:
+        raise ValueError(f"{field} must be an integer, got {value!r}") from err

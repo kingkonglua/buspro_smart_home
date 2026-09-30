@@ -25,6 +25,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_SUBTYPE,
     DEVICE_TYPE_SENSOR,
+    coerce_int,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,8 +54,8 @@ async def async_setup_entry(
         if device_config[CONF_DEVICE_TYPE] != DEVICE_TYPE_SENSOR:
             continue
 
-        subnet_id = device_config[CONF_SUBNET_ID]
-        device_id = device_config[CONF_DEVICE_ID]
+        subnet_id = coerce_int(device_config[CONF_SUBNET_ID], CONF_SUBNET_ID)
+        device_id = coerce_int(device_config[CONF_DEVICE_ID], CONF_DEVICE_ID)
         sensor_type = device_config.get(CONF_SUBTYPE, TEMPERATURE)
         name = device_config.get("name", f"Sensor {subnet_id}-{device_id}")
         device_address = (subnet_id, device_id)
