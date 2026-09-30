@@ -3,10 +3,145 @@
     "step": {
       "user": {
         "title": "Buspro gateway konfigurasjon",
-        "description": "Tast inn IP-adresse og portnummer til gateway.",
+        "description": "Oppdag HDL Buspro-gatewayer automatisk på nettverket ({count} funnet), velg én, eller skriv inn IP og port manuelt.",
+        "data": {
+          "gateway_choice": "Oppdaget gateway-IP",
+          "host": "IP-adresse",
+          "port": "Portnummer"
+        }
+      },
+      "manual": {
+        "title": "Skriv inn gateway-adresse manuelt",
+        "description": "Skriv inn IP-adresse og portnummer for HDL Buspro-gatewayen.",
         "data": {
           "host": "IP-adresse",
           "port": "Portnummer"
+        }
+      },
+      "init": {
+        "title": "HDL Buspro enhetsbehandling",
+        "description": "Gjeldende enheter:\n{devices}\n\nVelg en handling:",
+        "data": {
+          "action": "Handling",
+          "add": "Legg til enhet",
+          "remove": "Fjern enhet",
+          "scan_bus": "Skann bussen for enheter",
+          "done": "Ferdig"
+        }
+      },
+      "scan_bus": {
+        "title": "Skann bussen for enheter",
+        "description": "Start skanning av bussen for alle enheter. Etter skanningen vises resultatet for import.",
+        "data": {
+          "scan_duration": "Skannetid (sekunder)"
+        }
+      },
+      "scan_bus_devices": {
+        "title": "Velg enheter som skal importeres",
+        "description": "Fant {found} enheter, {new} nye. Velg enheter du vil legge til. For sensorer, velg undertype (temperatur, lysstyrke eller fuktighet) per enhet.",
+        "data": {
+          "devices": "Enheter som skal importeres",
+          "sensor_subtypes": "Sensorundertype"
+        }
+      },
+      "add_device": {
+        "title": "Legg til enhet",
+        "description": "Velg hvilken type enhet som skal legges til.",
+        "data": {
+          "device_type": "Enhetstype"
+        }
+      },
+      "add_light": {
+        "title": "Legg til lys",
+        "description": "Skriv inn adresse og navn for lysenheten. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_switch": {
+        "title": "Legg til bryter",
+        "description": "Skriv inn adresse og navn for bryterenheten. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_binary_sensor": {
+        "title": "Legg til binærsensor",
+        "description": "Skriv inn adresse og type for binærsensoren. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal / bryternummer",
+          "subtype": "Sensortype",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_sensor": {
+        "title": "Legg til sensor",
+        "description": "Skriv inn adresse og type for sensoren. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "subtype": "Sensortype",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_cover": {
+        "title": "Legg til gardin",
+        "description": "Skriv inn adresse, kanal og navn for gardinenheten. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal / gardinnummer",
+          "subtype": "Gardintype",
+          "travel_time": "Kjøretid i sekunder (for posisjonsestimering)",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_button": {
+        "title": "Legg til knapp",
+        "description": "Legg til en momentanknapp (f.eks. én IR-kode for klima-utsenderen). Kanalen er det universelle bryternummeret. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "channel": "Kanal / bryternummer",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_climate": {
+        "title": "Legg til klima",
+        "description": "Skriv inn adresse og type for klimaanlegget. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "subtype": "Klimatype (floor_heating / ac / ac_panel)",
+          "ac_number": "Klimaanlegg / spor-nummer",
+          "channel": "Temperaturkanal (kun ac_panel)",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "add_scene": {
+        "title": "Legg til scene",
+        "description": "Skriv inn målenhetens adresse og (område, scene)-numrene som skal utløses. {device_key}",
+        "data": {
+          "subnet_id": "Undernett-ID",
+          "device_id": "Enhets-ID",
+          "area_number": "Områdenummer",
+          "scene_number": "Scenenummer",
+          "name": "Navn (valgfritt)"
+        }
+      },
+      "remove_device": {
+        "title": "Fjern enhet",
+        "description": "Velg en enhet som skal fjernes. {message}",
+        "data": {
+          "device": "Enhet"
         }
       }
     },

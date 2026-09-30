@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "HDL Buspro 网关",
-        "description": "自动发现局域网中的 HDL Buspro 网关，选择后继续配置；也可手动输入 IP 和端口。",
+        "description": "自动发现局域网中的 HDL Buspro 网关（共 {count} 个），选择后继续配置；也可手动输入 IP 和端口。",
         "data": {
           "gateway_choice": "选择已发现的网关 IP",
           "host": "IP 地址",
@@ -16,6 +16,132 @@
         "data": {
           "host": "IP 地址",
           "port": "端口号"
+        }
+      },
+      "init": {
+        "title": "HDL Buspro 设备管理",
+        "description": "当前设备：\n{devices}\n\n请选择操作：",
+        "data": {
+          "action": "操作",
+          "add": "添加设备",
+          "remove": "删除设备",
+          "scan_bus": "扫描总线发现设备",
+          "done": "完成"
+        }
+      },
+      "scan_bus": {
+        "title": "扫描总线设备",
+        "description": "开始扫描总线上的所有设备，扫描完成后展示结果供勾选导入。",
+        "data": {
+          "scan_duration": "扫描时长（秒）"
+        }
+      },
+      "scan_bus_devices": {
+        "title": "选择要导入的设备",
+        "description": "发现 {found} 个设备，其中 {new} 个新设备。勾选希望添加的设备，传感器可单独选择子类型，然后提交。",
+        "data": {
+          "devices": "要导入的设备",
+          "sensor_subtypes": "传感器子类型"
+        }
+      },
+      "add_device": {
+        "title": "添加设备",
+        "description": "请选择要添加的设备类型。",
+        "data": {
+          "device_type": "设备类型"
+        }
+      },
+      "add_light": {
+        "title": "添加灯",
+        "description": "请输入灯设备的地址和名称。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "channel": "通道",
+          "name": "名称（可选）"
+        }
+      },
+      "add_switch": {
+        "title": "添加开关",
+        "description": "请输入开关设备的地址和名称。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "channel": "通道",
+          "name": "名称（可选）"
+        }
+      },
+      "add_binary_sensor": {
+        "title": "添加二进制传感器",
+        "description": "请输入二进制传感器的地址和类型。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "channel": "通道 / 开关编号",
+          "subtype": "传感器类型",
+          "name": "名称（可选）"
+        }
+      },
+      "add_sensor": {
+        "title": "添加传感器",
+        "description": "请输入传感器的地址和类型。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "subtype": "传感器类型",
+          "name": "名称（可选）"
+        }
+      },
+      "add_cover": {
+        "title": "添加窗帘",
+        "description": "请输入窗帘设备的地址、通道和名称。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "channel": "通道 / 窗帘编号",
+          "subtype": "窗帘类型",
+          "travel_time": "全程运行时间（秒，用于位置估算）",
+          "name": "名称（可选）"
+        }
+      },
+      "add_button": {
+        "title": "添加按钮",
+        "description": "添加瞬时按钮（例如空调发射模块的一条 IR 码）。通道即万能开关编号。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "channel": "通道 / 开关编号",
+          "name": "名称（可选）"
+        }
+      },
+      "add_climate": {
+        "title": "添加温控器",
+        "description": "请输入温控设备的地址和类型。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "subtype": "温控类型（floor_heating / ac / ac_panel）",
+          "ac_number": "空调机号 / 面板槽位号",
+          "channel": "温度通道（仅 ac_panel）",
+          "name": "名称（可选）"
+        }
+      },
+      "add_scene": {
+        "title": "添加场景",
+        "description": "请输入目标设备地址以及要触发的（区域, 场景）编号。{device_key}",
+        "data": {
+          "subnet_id": "子网 ID",
+          "device_id": "设备 ID",
+          "area_number": "区域编号",
+          "scene_number": "场景编号",
+          "name": "名称（可选）"
+        }
+      },
+      "remove_device": {
+        "title": "删除设备",
+        "description": "请选择要删除的设备。{message}",
+        "data": {
+          "device": "设备"
         }
       }
     },

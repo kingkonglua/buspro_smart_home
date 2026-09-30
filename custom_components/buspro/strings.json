@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "HDL Buspro 网关",
-        "description": "自动发现局域网中的 HDL Buspro 网关，选择后继续配置；也可手动输入 IP 和端口。",
+        "description": "自动发现局域网中的 HDL Buspro 网关（共 {count} 个），选择后继续配置；也可手动输入 IP 和端口。",
         "data": {
           "gateway_choice": "选择已发现的网关 IP",
           "host": "网关 IP 地址",
@@ -16,6 +16,132 @@
         "data": {
           "host": "IP 地址",
           "port": "端口号"
+        }
+      },
+      "init": {
+        "title": "HDL Buspro Device Management",
+        "description": "Current devices:\n{devices}\n\nSelect an action:",
+        "data": {
+          "action": "Action",
+          "add": "Add device",
+          "remove": "Remove device",
+          "scan_bus": "Scan bus for devices",
+          "done": "Done"
+        }
+      },
+      "scan_bus": {
+        "title": "Scan Bus Devices",
+        "description": "Start scanning the bus for all devices. After scanning, the results will be shown for import.",
+        "data": {
+          "scan_duration": "Scan duration (seconds)"
+        }
+      },
+      "scan_bus_devices": {
+        "title": "Select Devices to Import",
+        "description": "Found {found} devices, {new} new. Select devices to import. For sensors, choose the subtype per device.",
+        "data": {
+          "devices": "Devices to import",
+          "sensor_subtypes": "Sensor subtype"
+        }
+      },
+      "add_device": {
+        "title": "Add Device",
+        "description": "Select the type of device to add.",
+        "data": {
+          "device_type": "Device type"
+        }
+      },
+      "add_light": {
+        "title": "Add Light",
+        "description": "Enter the address and name for the light device. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "channel": "Channel",
+          "name": "Name (optional)"
+        }
+      },
+      "add_switch": {
+        "title": "Add Switch",
+        "description": "Enter the address and name for the switch device. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "channel": "Channel",
+          "name": "Name (optional)"
+        }
+      },
+      "add_binary_sensor": {
+        "title": "Add Binary Sensor",
+        "description": "Enter the address and type for the binary sensor device. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "channel": "Channel / Switch number",
+          "subtype": "Sensor type",
+          "name": "Name (optional)"
+        }
+      },
+      "add_sensor": {
+        "title": "Add Sensor",
+        "description": "Enter the address and type for the sensor device. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "subtype": "Sensor type",
+          "name": "Name (optional)"
+        }
+      },
+      "add_cover": {
+        "title": "Add Cover (Curtain)",
+        "description": "Enter the address, channel and name for the curtain device. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "channel": "Channel / Curtain number",
+          "subtype": "Cover type",
+          "travel_time": "Travel time in seconds (for position estimation)",
+          "name": "Name (optional)"
+        }
+      },
+      "add_button": {
+        "title": "Add Button",
+        "description": "Add a momentary button (e.g. one IR code of the AC emitter). Channel is the universal switch number. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "channel": "Channel / Switch number",
+          "name": "Name (optional)"
+        }
+      },
+      "add_climate": {
+        "title": "Add Climate",
+        "description": "Enter the address and type for the climate device. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "subtype": "Climate type (floor_heating / ac / ac_panel)",
+          "ac_number": "AC unit / slot number",
+          "channel": "Temperature channel (ac_panel only)",
+          "name": "Name (optional)"
+        }
+      },
+      "add_scene": {
+        "title": "Add Scene",
+        "description": "Enter the target device address and the (area, scene) numbers to trigger. {device_key}",
+        "data": {
+          "subnet_id": "Subnet ID",
+          "device_id": "Device ID",
+          "area_number": "Area number",
+          "scene_number": "Scene number",
+          "name": "Name (optional)"
+        }
+      },
+      "remove_device": {
+        "title": "Remove Device",
+        "description": "Select a device to remove. {message}",
+        "data": {
+          "device": "Device"
         }
       }
     },
