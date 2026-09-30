@@ -56,13 +56,13 @@ set_universal_switch:
         object:
     switch_number:
       name: Switch number
-      description: Switch number (1-8).
+      description: Switch number (1-255).
       required: true
       example: 1
       selector:
         number:
           min: 1
-          max: 8
+          max: 255
     status:
       name: Status
       description: Switch status (0 or 1).
