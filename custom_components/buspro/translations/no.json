@@ -163,7 +163,11 @@
         "title": "Integrasjonshandlinger",
         "description": "Velg en handling:",
         "data": {
-          "action": "Handlingstype"
+          "action": "Handlingstype",
+          "add": "Legg til enhet",
+          "scan_bus": "Skann buss for enheter",
+          "remove": "Fjern enhet",
+          "done": "Fullfør"
         }
       },
       "add_device": {
@@ -279,10 +283,13 @@
       },
       "scan_bus_devices": {
         "title": "Velg enheter som skal importeres",
-        "description": "Velg enheter som skal importeres. For sensorer, velg undertype (temperatur, lysstyrke eller fuktighet) per enhet.",
+        "description": "Velg enheter som skal importeres. Enheter merket med ✓ finnes allerede. For sensorer, velg undertype (temperatur, lysstyrke eller fuktighet) per enhet.",
         "data": {
           "devices": "Enheter som skal importeres",
-          "sensor_subtypes": "Sensorundertype"
+          "sensor_subtypes": "Sensorundertype",
+          "temperature": "Temperatursensor",
+          "illuminance": "Lysstyrkesensor",
+          "humidity": "Fuktighetssensor"
         }
       }
     },

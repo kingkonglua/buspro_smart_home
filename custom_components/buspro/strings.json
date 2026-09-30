@@ -163,7 +163,11 @@
         "title": "集成操作",
         "description": "选择一项操作：",
         "data": {
-          "action": "操作类型"
+          "action": "操作类型",
+          "add": "Add device",
+          "scan_bus": "Scan bus for devices",
+          "remove": "Remove device",
+          "done": "Done"
         }
       },
       "add_device": {
@@ -279,10 +283,13 @@
       },
       "scan_bus_devices": {
         "title": "选择要导入的设备",
-        "description": "Select devices to import. For sensors, choose subtype (temperature, illuminance or humidity) per device.",
+        "description": "Select devices to import. Devices marked ✓ already exist. For sensors, choose subtype (temperature, illuminance or humidity) per device.",
         "data": {
           "devices": "要导入的设备",
-          "sensor_subtypes": "传感器子类型"
+          "sensor_subtypes": "传感器子类型",
+          "temperature": "Temperature sensor",
+          "illuminance": "Illuminance sensor",
+          "humidity": "Humidity sensor"
         }
       }
     },

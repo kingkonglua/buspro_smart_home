@@ -163,7 +163,11 @@
         "title": "HDL Buspro Device Management",
         "description": "Current devices:\n{devices}\n\nSelect an action:",
         "data": {
-          "action": "Action"
+          "action": "Action",
+          "add": "Add device",
+          "scan_bus": "Scan bus for devices",
+          "remove": "Remove device",
+          "done": "Done"
         }
       },
       "add_device": {
@@ -279,10 +283,13 @@
       },
       "scan_bus_devices": {
         "title": "Select Devices to Import",
-        "description": "Select devices you want to add. For sensors, choose the subtype (temperature, illuminance or humidity) per device, then submit.",
+        "description": "Select devices you want to add. Devices marked ✓ already exist. For sensors, choose the subtype (temperature, illuminance or humidity) per device, then submit.",
         "data": {
           "devices": "Devices to import",
-          "sensor_subtypes": "Sensor subtype"
+          "sensor_subtypes": "Sensor subtype",
+          "temperature": "Temperature sensor",
+          "illuminance": "Illuminance sensor",
+          "humidity": "Humidity sensor"
         }
       }
     },

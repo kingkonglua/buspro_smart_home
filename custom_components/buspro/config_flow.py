@@ -287,12 +287,12 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required("action"): vol.In({
-                    "add": "Add device",
-                    "scan_bus": "扫描总线发现设备",
-                    "remove": "Remove device",
-                    "done": "Done",
-                }),
+                vol.Required("action"): vol.In([
+                    "add",
+                    "scan_bus",
+                    "remove",
+                    "done",
+                ]),
             }),
             description_placeholders={"devices": summary},
         )
@@ -563,7 +563,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 parts.append(f"{disc.channel_count}ch")
             label = "  ·  ".join(parts)
             if not new_keys:
-                label += "  ✓ 已存在"
+                label += "  ✓"
             else:
                 default_selected.extend(new_keys)
             options.append(SelectOptionDict(value=disc.key, label=label))
@@ -626,9 +626,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                     selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                SelectOptionDict(value="temperature", label="温度传感器"),
-                                SelectOptionDict(value="illuminance", label="亮度传感器"),
-                                SelectOptionDict(value="humidity", label="湿度传感器"),
+                                "temperature",
+                                "illuminance",
+                                "humidity",
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )

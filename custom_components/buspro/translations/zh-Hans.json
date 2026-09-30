@@ -163,7 +163,11 @@
         "title": "HDL Buspro 设备管理",
         "description": "请选择操作：",
         "data": {
-          "action": "操作"
+          "action": "操作",
+          "add": "添加设备",
+          "scan_bus": "扫描总线发现设备",
+          "remove": "删除设备",
+          "done": "完成"
         }
       },
       "add_device": {
@@ -279,10 +283,13 @@
       },
       "scan_bus_devices": {
         "title": "选择要导入的设备",
-        "description": "勾选希望添加的设备。传感器可单独选择子类型（温度、亮度或湿度），然后提交。",
+        "description": "勾选希望添加的设备，带 ✓ 的设备已存在。传感器可单独选择子类型（温度、亮度或湿度），然后提交。",
         "data": {
           "devices": "要导入的设备",
-          "sensor_subtypes": "传感器子类型"
+          "sensor_subtypes": "传感器子类型",
+          "temperature": "温度传感器",
+          "illuminance": "亮度传感器",
+          "humidity": "湿度传感器"
         }
       }
     },
