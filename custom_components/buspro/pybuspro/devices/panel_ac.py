@@ -163,6 +163,8 @@ class PanelAirConditioner(Device):
 
     # ----- telegram decode --------------------------------------------------
     def _telegram_received_cb(self, telegram) -> None:
+        if telegram.payload is None:
+            return
         payload = telegram.payload
         if not isinstance(payload, (list, tuple)):
             return
@@ -176,7 +178,7 @@ class PanelAirConditioner(Device):
             self._decode_temperature(payload)
 
     def _decode_field(self, payload) -> None:
-        if len(payload) < 3:
+        if not payload or len(payload) < 3:
             return
         field, value, channel = payload[0], payload[1], payload[2]
         if channel != self._ac_channel:
@@ -203,7 +205,7 @@ class PanelAirConditioner(Device):
 
     def _decode_temperature(self, payload) -> None:
         # [channel, signed_whole_degrees, <optional float32 LE degC>]
-        if len(payload) < 2 or payload[0] != self._temperature_channel:
+        if not payload or len(payload) < 2 or payload[0] != self._temperature_channel:
             return
         whole = payload[1]
         if whole > 127:

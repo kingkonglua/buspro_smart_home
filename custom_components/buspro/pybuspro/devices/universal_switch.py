@@ -18,6 +18,9 @@ class UniversalSwitch(Device):
         self._call_read_current_status_of_universal_switch(run_from_init=True)
 
     def _telegram_received_cb(self, telegram):
+        if telegram.payload is None:
+            return
+
         if telegram.operate_code == OperateCode.UniversalSwitchControlResponse:
             if len(telegram.payload) < 2:
                 return

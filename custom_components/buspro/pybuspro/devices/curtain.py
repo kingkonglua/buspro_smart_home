@@ -24,6 +24,9 @@ class Curtain(Device):
         self._call_read_current_status(run_from_init=True)
 
     def _telegram_received_cb(self, telegram):
+        if telegram.payload is None:
+            return
+
         if telegram.operate_code == OperateCode.CurtainSwitchControlResponse:
             if len(telegram.payload) >= 2:
                 curtain_number = telegram.payload[0]
