@@ -42,6 +42,7 @@ from .const import (
     CONF_CHANNEL,
     DEVICE_TYPE_CLIMATE,
     coerce_int,
+    gateway_scoped_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -359,8 +360,10 @@ class BusproClimate(ClimateEntity):
 
     @property
     def unique_id(self):
-        """Return the unique id."""
-        return self._device.device_identifier
+        """Return the unique id, scoped to this entity's gateway."""
+        return gateway_scoped_unique_id(
+            self._module, self._device.device_identifier
+        )
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
@@ -472,8 +475,10 @@ class BusproACClimate(ClimateEntity):
 
     @property
     def unique_id(self):
-        """Return the unique id."""
-        return self._device.device_identifier
+        """Return the unique id, scoped to this entity's gateway."""
+        return gateway_scoped_unique_id(
+            self._module, self._device.device_identifier
+        )
 
     @property
     def temperature_unit(self):

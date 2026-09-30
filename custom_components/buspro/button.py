@@ -23,6 +23,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_CHANNEL,
     DEVICE_TYPE_BUTTON,
+    gateway_scoped_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class BusproButton(ButtonEntity):
         self._device_address = device_address
         self._switch_number = switch_number
         self._attr_name = name
-        self._attr_unique_id = unique_id
+        self._attr_unique_id = gateway_scoped_unique_id(module, unique_id)
         self._attr_should_poll = False
 
     @property

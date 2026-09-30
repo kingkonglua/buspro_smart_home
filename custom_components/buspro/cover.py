@@ -40,6 +40,7 @@ from .const import (
     CONF_TRAVEL_TIME,
     DEVICE_TYPE_COVER,
     coerce_int,
+    gateway_scoped_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -369,8 +370,10 @@ class BusproCover(CoverEntity):
 
     @property
     def unique_id(self):
-        """Return the unique id."""
-        return self._device.device_identifier
+        """Return the unique id, scoped to this entity's gateway."""
+        return gateway_scoped_unique_id(
+            self._module, self._device.device_identifier
+        )
 
     @property
     def current_cover_position(self):

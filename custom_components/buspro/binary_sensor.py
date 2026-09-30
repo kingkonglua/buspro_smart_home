@@ -22,6 +22,7 @@ from .const import (
     CONF_CHANNEL,
     CONF_SUBTYPE,
     DEVICE_TYPE_BINARY_SENSOR,
+    gateway_scoped_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -149,11 +150,11 @@ class BusproBinarySensor(BinarySensorEntity):
 
     @property
     def unique_id(self):
-        """Return the unique id."""
+        """Return the unique id, scoped to this entity's gateway."""
         unique_id = f"{self._device.device_identifier}-{self._sensor_type}"
         if self._channel is not None:
             unique_id = f"{unique_id}-{self._channel}"
-        return unique_id
+        return gateway_scoped_unique_id(self._module, unique_id)
 
     @property
     def is_on(self):

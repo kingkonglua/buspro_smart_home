@@ -25,6 +25,7 @@ from .const import (
     CONF_AREA_NUMBER,
     CONF_SCENE_NUMBER,
     DEVICE_TYPE_SCENE,
+    gateway_scoped_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,7 +79,9 @@ class BusproScene(SceneEntity):
         self._hass = hass
         self._scene = scene
         self._attr_name = name
-        self._attr_unique_id = f"buspro_{unique_key}"
+        self._attr_unique_id = gateway_scoped_unique_id(
+            module, f"buspro_{unique_key}"
+        )
         self._module = module
 
     @property

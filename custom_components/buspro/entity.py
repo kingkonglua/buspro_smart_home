@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from homeassistant.helpers.entity import Entity
 
+from .const import gateway_scoped_unique_id
+
 
 class BusproEntityMixin:
     """Mixin wiring an HA entity to a pybuspro device object.
@@ -32,7 +34,7 @@ class BusproEntityMixin:
         self._device = device
         identifier = getattr(device, "device_identifier", None)
         if identifier is not None:
-            self._attr_unique_id = identifier
+            self._attr_unique_id = gateway_scoped_unique_id(module, identifier)
         device.register_device_updated_cb(self._async_device_updated)
 
     async def _async_device_updated(self, device):

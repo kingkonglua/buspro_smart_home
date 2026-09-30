@@ -25,6 +25,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_CHANNEL,
     DEVICE_TYPE_LIGHT,
+    gateway_scoped_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -134,5 +135,7 @@ class BusproLight(LightEntity):
 
     @property
     def unique_id(self):
-        """Return the unique id."""
-        return self._device.device_identifier
+        """Return the unique id, scoped to this entity's gateway."""
+        return gateway_scoped_unique_id(
+            self._module, self._device.device_identifier
+        )

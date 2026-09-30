@@ -26,6 +26,7 @@ from .const import (
     CONF_SUBTYPE,
     DEVICE_TYPE_SENSOR,
     coerce_int,
+    gateway_scoped_unique_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -182,5 +183,8 @@ class BusproSensor(SensorEntity):
 
     @property
     def unique_id(self):
-        """Return the unique id."""
-        return f"{self._device.device_identifier}-{self._sensor_type}"
+        """Return the unique id, scoped to this entity's gateway."""
+        return gateway_scoped_unique_id(
+            self._module,
+            f"{self._device.device_identifier}-{self._sensor_type}",
+        )

@@ -91,6 +91,27 @@ DEVICE_TYPE_AC = "ac"
 DEVICE_TYPE_CURTAIN = "curtain"
 
 
+def gateway_scoped_unique_id(module, local_id):
+    """Namespace a bus-local entity id by its owning gateway.
+
+    A pybuspro ``device_identifier`` (e.g. ``"1.10.1"``) is only unique *within*
+    one HDL gateway. Two gateways that share the same bus numbering would
+    otherwise emit identical Home Assistant ``unique_id`` values and the second
+    gateway's entities would be silently dropped by the entity registry.
+
+    We prefix with the owning config entry's ``entry_id`` (set on the module by
+    ``async_setup_entry``): Home Assistant guarantees it unique, it is stable
+    across restarts/reloads, and unlike the gateway host it still separates two
+    entries that reach the same host (e.g. via a second port or a replaced
+    gateway). Falls back to the raw id when no gateway is known so ad-hoc or
+    test entities keep working.
+    """
+    entry_id = getattr(module, "entry_id", None)
+    if not entry_id:
+        return local_id
+    return f"{entry_id}-{local_id}"
+
+
 def coerce_int(value, field):
     """Coerce a config-entry numeric field to ``int``.
 
