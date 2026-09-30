@@ -21,6 +21,7 @@
       "init": {
         "title": "HDL Buspro Device Management",
         "description": "Current devices:\n{devices}\n\nSelect an action:",
+        "no_devices": "(none)",
         "data": {
           "action": "Action",
           "add": "Add device",
@@ -140,10 +141,24 @@
       "remove_device": {
         "title": "Remove Device",
         "description": "Select a device to remove. {message}",
+        "no_devices": "No devices to remove.",
         "data": {
           "device": "Device"
         }
       }
+    },
+    "device_type": {
+      "light": "Dimmer channel",
+      "switch": "Relay channel",
+      "binary_sensor": "Dry contact / universal switch",
+      "sensor": "Sensor",
+      "climate": "Floor heating / thermostat",
+      "cover": "Curtain",
+      "button": "Button",
+      "scene": "Scene",
+      "ac": "Air conditioner",
+      "curtain": "Curtain",
+      "unknown": "Unknown device"
     },
     "progress": {
       "bus_scan": "Scanning the bus, {seconds_left} s remaining…",

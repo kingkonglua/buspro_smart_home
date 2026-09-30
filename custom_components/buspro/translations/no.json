@@ -21,6 +21,7 @@
       "init": {
         "title": "HDL Buspro enhetsbehandling",
         "description": "Gjeldende enheter:\n{devices}\n\nVelg en handling:",
+        "no_devices": "(ingen)",
         "data": {
           "action": "Handling",
           "add": "Legg til enhet",
@@ -140,10 +141,24 @@
       "remove_device": {
         "title": "Fjern enhet",
         "description": "Velg en enhet som skal fjernes. {message}",
+        "no_devices": "Ingen enheter å fjerne.",
         "data": {
           "device": "Enhet"
         }
       }
+    },
+    "device_type": {
+      "light": "Dimmerkanal",
+      "switch": "Relékanal",
+      "binary_sensor": "Tørrkontakt / universalbryter",
+      "sensor": "Sensor",
+      "climate": "Gulvvarme / termostat",
+      "cover": "Gardin",
+      "button": "Knapp",
+      "scene": "Scene",
+      "ac": "Aircondition",
+      "curtain": "Gardin",
+      "unknown": "Ukjent enhet"
     },
     "progress": {
       "bus_scan": "Skanner bussen, {seconds_left} s gjenstår…",

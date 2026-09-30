@@ -21,6 +21,7 @@
       "init": {
         "title": "HDL Buspro 设备管理",
         "description": "当前设备：\n{devices}\n\n请选择操作：",
+        "no_devices": "（无）",
         "data": {
           "action": "操作",
           "add": "添加设备",
@@ -140,10 +141,24 @@
       "remove_device": {
         "title": "删除设备",
         "description": "请选择要删除的设备。{message}",
+        "no_devices": "没有可删除的设备。",
         "data": {
           "device": "设备"
         }
       }
+    },
+    "device_type": {
+      "light": "调光器通道",
+      "switch": "继电器通道",
+      "binary_sensor": "干接点/万能开关",
+      "sensor": "传感器",
+      "climate": "地暖/温控",
+      "cover": "窗帘",
+      "button": "按钮",
+      "scene": "场景",
+      "ac": "空调",
+      "curtain": "窗帘",
+      "unknown": "未知设备"
     },
     "progress": {
       "bus_scan": "正在扫描总线，剩余 {seconds_left} 秒…",

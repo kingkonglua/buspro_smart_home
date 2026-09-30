@@ -15,7 +15,9 @@ Two convenience entry points are layered on top of the classic manual flow
 """
 
 import asyncio
+import json
 import logging
+import os
 
 import voluptuous as vol
 
@@ -73,6 +75,56 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _flatten_translations(node, prefix=""):
+    """Flatten a nested translation dict into ``{"a.b.c": "text"}``."""
+    flat: dict[str, str] = {}
+    if isinstance(node, dict):
+        for key, value in node.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            flat.update(_flatten_translations(value, path))
+    elif isinstance(node, str):
+        flat[prefix] = node
+    return flat
+
+
+_TRANSLATION_CACHE: dict[str, dict[str, str]] = {}
+
+
+def _translation_table(language):
+    """Return the flattened translation table for *language* (cached).
+
+    The config flow interpolates a few values (device type names, the empty
+    device-list marker) into description placeholders. The surrounding
+    description is translated by the frontend, but these values have to be
+    resolved here, so we read the translation JSON shipped with the
+    integration. Falls back to the base language and then English.
+    """
+    lang = (language or "en").strip()
+    cached = _TRANSLATION_CACHE.get(lang)
+    if cached is not None:
+        return cached
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    candidates = [os.path.join(base, "translations", f"{lang}.json")]
+    if "-" in lang:
+        candidates.append(
+            os.path.join(base, "translations", f"{lang.split('-', 1)[0]}.json")
+        )
+    candidates.append(os.path.join(base, "translations", "en.json"))
+
+    table: dict[str, str] = {}
+    for path in candidates:
+        try:
+            with open(path, encoding="utf-8") as handle:
+                table.update(_flatten_translations(json.load(handle)))
+            break
+        except (OSError, ValueError):
+            continue
+
+    _TRANSLATION_CACHE[lang] = table
+    return table
 
 
 class BusproConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -234,6 +286,30 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
         if self.devices is None:
             self.devices = dict(self.config_entry.options.get(CONF_DEVICES, {}))
 
+    def _flow_language(self):
+        """Return the user's configured language, defaulting to English."""
+        config = getattr(self, "hass", None)
+        config = getattr(config, "config", None)
+        return getattr(config, "language", None) or "en"
+
+    def _translate(self, key, fallback=None):
+        """Resolve a flattened translation key for the configured language.
+
+        Returns *fallback* (or the key itself) when the translation is
+        missing, so a lookup can never raise or render ``None``.
+        """
+        value = _translation_table(self._flow_language()).get(key)
+        if value:
+            return value
+        return fallback if fallback is not None else key
+
+    def _device_type_label(self, device_type):
+        """Localized display name for an internal device-type key."""
+        internal = device_type or "unknown"
+        return self._translate(
+            f"config.device_type.{internal}", internal
+        )
+
     def _get_device_display_name(self, device_key, device_config):
         """Get a human-readable display string for a device."""
         name = device_config.get("name", device_key)
@@ -247,7 +323,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
         else:
             addr = f"{subnet}.{device_id}"
 
-        return f"{name} ({device_type}, {addr})"
+        return f"{name} ({self._device_type_label(device_type)}, {addr})"
 
     def _live_hdl(self):
         """Return the connected Buspro client for this entry, or None."""
@@ -282,7 +358,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 for k, v in self.devices.items()
             ])
         else:
-            summary = "  (none)"
+            summary = "  " + self._translate("config.step.init.no_devices")
 
         return self.async_show_form(
             step_id="init",
@@ -556,7 +632,8 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 continue
             configs = self._import_discovered(disc, classification)
             new_keys = [k for k, _ in configs if k not in self.devices]
-            parts = [disc.address, labels.get(classification, classification)]
+            label_key = labels.get(classification, classification)
+            parts = [disc.address, self._translate(label_key, classification)]
             if disc.type_code and disc.type_code != "0x0000":
                 parts.append(disc.type_code)
             if disc.channel_count:
@@ -1003,7 +1080,11 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id="remove_device",
                 data_schema=vol.Schema({}),
-                description_placeholders={"message": "No devices to remove."},
+                description_placeholders={
+                    "message": self._translate(
+                        "config.step.remove_device.no_devices"
+                    )
+                },
             )
 
         device_options = {

@@ -106,16 +106,19 @@ SCAN_TIMEOUT_MARGIN = DIRECTED_PHASE_MAX_SECONDS + 5.0
 # Classification types are our integration types except 'curtain' and 'ac'
 # (the config flow maps those to cover/curtain_module and climate/ac).
 
-# Friendly labels for the classification types (config-flow checklist).
+# Translation keys for the classification types (config-flow checklist).
+# The config flow resolves each value through the translations/*.json files so
+# the scan checklist is localized; it falls back to the classification key
+# itself when a translation is unavailable.
 SCAN_TYPE_LABELS: dict[str, str] = {
-    DEVICE_TYPE_SWITCH: "继电器通道",
-    DEVICE_TYPE_LIGHT: "调光器通道",
-    DEVICE_TYPE_SENSOR: "传感器",
-    DEVICE_TYPE_CLIMATE: "地暖/温控",
-    DEVICE_TYPE_AC: "空调",
-    DEVICE_TYPE_CURTAIN: "窗帘",
-    DEVICE_TYPE_BINARY_SENSOR: "干接点/万能开关",
-    "unknown": "未知设备",
+    DEVICE_TYPE_SWITCH: "config.device_type.switch",
+    DEVICE_TYPE_LIGHT: "config.device_type.light",
+    DEVICE_TYPE_SENSOR: "config.device_type.sensor",
+    DEVICE_TYPE_CLIMATE: "config.device_type.climate",
+    DEVICE_TYPE_AC: "config.device_type.ac",
+    DEVICE_TYPE_CURTAIN: "config.device_type.curtain",
+    DEVICE_TYPE_BINARY_SENSOR: "config.device_type.binary_sensor",
+    "unknown": "config.device_type.unknown",
 }
 
 # Operate codes a keypad/panel *originates* when a button is pressed or when
