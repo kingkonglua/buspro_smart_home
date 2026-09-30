@@ -20,6 +20,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
     DOMAIN,
@@ -38,6 +39,11 @@ EVENT_BUSPRO_CONNECTION_LOST = f"{DOMAIN}_connection_lost"
 # Exponential-ish reconnect backoff (seconds) after an unexpected transport
 # loss. The last value repeats until the gateway answers again.
 RECONNECT_DELAYS = [5, 10, 20, 30, 60]
+
+# R2: errors that mean "the gateway/network is not ready yet" rather than "the
+# integration is broken". Converting these to ConfigEntryNotReady makes HA back
+# off and retry the entry setup instead of latching a permanent SETUP_ERROR.
+TRANSIENT_SETUP_ERRORS = (OSError, asyncio.TimeoutError, ConnectionError)
 
 
 class BusproData(dict):
@@ -190,6 +196,24 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
     return True
 
 
+async def _async_rollback_failed_setup(hass, config_entry, buspro_module):
+    """Tear down a module whose entry setup failed before HA took ownership.
+
+    A config entry that raises ``ConfigEntryNotReady`` is retried by HA, but HA
+    does NOT run ``async_on_unload`` callbacks for a failed setup. Without this
+    the UDP socket opened by ``start()`` would leak on every retry, eventually
+    failing with ``Address already in use``.
+    """
+    try:
+        await buspro_module.stop()
+    except Exception as err:  # noqa: BLE001 - rollback must never mask the cause
+        _LOGGER.warning("Error stopping Buspro module during setup rollback: %s", err)
+
+    bucket = hass.data.get(DOMAIN)
+    if isinstance(bucket, dict):
+        bucket.pop(config_entry.entry_id, None)
+
+
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up the Buspro component from a config entry."""
     host = config_entry.data.get(CONF_HOST, "")
@@ -216,11 +240,33 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     if configure_hooks is not None:
         await configure_hooks()
 
-    await buspro_module.start()
+    # R2: a transient transport fault (gateway not up yet, DNS hiccup, port in
+    # use) must become ConfigEntryNotReady so HA retries with backoff, instead
+    # of a plain exception that HA latches as SETUP_ERROR and never retries.
+    try:
+        await buspro_module.start()
+    except TRANSIENT_SETUP_ERRORS as exc:
+        await _async_rollback_failed_setup(hass, config_entry, buspro_module)
+        raise ConfigEntryNotReady(
+            f"Could not connect to Buspro gateway {host}:{port}: {exc}"
+        ) from exc
+
     hass.data[DOMAIN][config_entry.entry_id] = buspro_module
 
-    # Forward setup to all platforms
-    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+    # R2: register teardown as soon as the socket is open. This covers the
+    # unload path after a successful setup, and (together with the explicit
+    # rollback below) the "start succeeded but platform forwarding failed" path.
+    config_entry.async_on_unload(buspro_module.stop)
+
+    # Forward setup to all platforms. Only transient faults are retried; any
+    # other exception is a programming error and is allowed to propagate.
+    try:
+        await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+    except TRANSIENT_SETUP_ERRORS as exc:
+        await _async_rollback_failed_setup(hass, config_entry, buspro_module)
+        raise ConfigEntryNotReady(
+            f"Could not set up Buspro platforms for {host}:{port}: {exc}"
+        ) from exc
 
     # Listen for options updates (device add/remove)
     config_entry.async_on_unload(
