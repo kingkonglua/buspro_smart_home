@@ -63,7 +63,7 @@ SERVICE_BUSPRO_UNIVERSAL_SWITCH_SCHEMA = vol.Schema({
     vol.Required(SERVICE_BUSPRO_ATTR_STATUS): vol.Any(cv.positive_int),
 })
 
-PLATFORMS = ["light", "switch", "binary_sensor", "sensor", "climate", "cover", "button"]
+PLATFORMS = ["light", "switch", "binary_sensor", "sensor", "climate", "cover", "button", "scene"]
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

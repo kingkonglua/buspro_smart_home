@@ -31,6 +31,7 @@ from .pybuspro.devices.climate import ControlFloorHeatingStatus
 from .pybuspro.helpers.enums import OnOffStatus, AcMode, AcFanSpeed
 
 from . import DATA_BUSPRO
+from .entity import BusproEntityMixin
 from .const import (
     DOMAIN,
     CONF_DEVICES,
@@ -39,6 +40,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_SUBTYPE,
     CONF_AC_NUMBER,
+    CONF_CHANNEL,
     DEVICE_TYPE_CLIMATE,
 )
 
@@ -46,6 +48,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CLIMATE_SUBTYPE_FLOOR_HEATING = "floor_heating"
 CLIMATE_SUBTYPE_AC = "ac"
+CLIMATE_SUBTYPE_AC_PANEL = "ac_panel"
 
 PRESET_NONE = "none"
 PRESET_AWAY = "away"
@@ -105,7 +108,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Buspro climate devices from a config entry."""
     # noinspection PyUnresolvedReferences
-    from .pybuspro.devices import Climate, AC
+    from .pybuspro.devices import Climate, AC, PanelAirConditioner
 
     buspro_module = hass.data[DOMAIN]
     hdl = buspro_module.hdl
@@ -132,6 +135,22 @@ async def async_setup_entry(
 
             ac = AC(hdl, device_address, ac_number, name)
             entities.append(BusproACClimate(hass, ac))
+        elif subtype == CLIMATE_SUBTYPE_AC_PANEL:
+            # Touch-panel AC page: ac_number = panel AC slot, channel = the
+            # panel channel that carries its room-temperature reading.
+            ac_number = device_config.get(CONF_AC_NUMBER, 1)
+            temperature_channel = device_config.get(CONF_CHANNEL, 1)
+
+            _LOGGER.debug(
+                "Adding panel AC climate '%s' with address %s, slot %s, "
+                "temp channel %s",
+                name, device_address, ac_number, temperature_channel
+            )
+
+            panel_ac = PanelAirConditioner(
+                hdl, device_address, ac_number, temperature_channel, name
+            )
+            entities.append(BusproPanelACClimate(hass, panel_ac))
         else:
             _LOGGER.debug(
                 "Adding floor heating climate '%s' with address %s",
@@ -533,3 +552,83 @@ class BusproACClimate(ClimateEntity):
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set swing (sweep) mode."""
         await self._device.set_sweep(1 if swing_mode == SWING_ON else 0)
+
+
+# noinspection PyAbstractClass
+class BusproPanelACClimate(BusproEntityMixin, ClimateEntity):
+    """Buspro AC driven from a touch panel's AC page (Enviro / Granite)."""
+
+    def __init__(self, hass, device):
+        self._buspro_init_device(hass, device)
+
+        self._enable_turn_on_off_backwards_compatibility = False
+        self._attr_supported_features = (
+            ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.FAN_MODE
+            | ClimateEntityFeature.TURN_OFF
+            | ClimateEntityFeature.TURN_ON
+        )
+        self._attr_hvac_modes = [HVACMode.OFF, HVACMode.COOL, HVACMode.HEAT]
+        self._attr_fan_modes = ["auto", "low", "medium", "high"]
+        self._attr_min_temp = 16
+        self._attr_max_temp = 30
+        self._attr_target_temperature_step = 1
+
+    @property
+    def available(self) -> bool:
+        """Available once the panel has reported the slot and the link is up."""
+        module = self._hass.data.get(DATA_BUSPRO)
+        return bool(module and module.connected) and self._device.available
+
+    @property
+    def temperature_unit(self):
+        return UnitOfTemperature.CELSIUS
+
+    @property
+    def current_temperature(self):
+        return self._device.current_temperature
+
+    @property
+    def target_temperature(self):
+        return self._device.target_temperature
+
+    @property
+    def hvac_mode(self) -> Optional[str]:
+        if not self._device.is_on:
+            return HVACMode.OFF
+        return HVACMode.HEAT if self._device.hvac_mode == "heat" else HVACMode.COOL
+
+    @property
+    def hvac_action(self) -> Optional[str]:
+        if not self._device.is_on:
+            return HVACAction.OFF
+        if self._device.hvac_mode == "heat":
+            return HVACAction.HEATING
+        return HVACAction.COOLING
+
+    @property
+    def fan_mode(self) -> Optional[str]:
+        return self._device.fan_speed
+
+    async def async_set_hvac_mode(self, hvac_mode: str) -> None:
+        if hvac_mode == HVACMode.OFF:
+            await self._device.turn_off()
+        elif hvac_mode == HVACMode.COOL:
+            await self._device.set_hvac_mode("cool")
+        elif hvac_mode == HVACMode.HEAT:
+            await self._device.set_hvac_mode("heat")
+        else:
+            _LOGGER.error("Unrecognized panel AC mode: %s", hvac_mode)
+            return
+        self.async_write_ha_state()
+
+    async def async_set_temperature(self, **kwargs) -> None:
+        temperature = kwargs.get(ATTR_TEMPERATURE)
+        if temperature is None:
+            return
+        await self._device.set_target_temperature(temperature)
+        self.async_write_ha_state()
+
+    async def async_set_fan_mode(self, fan_mode: str) -> None:
+        await self._device.set_fan_speed(fan_mode)
+        self.async_write_ha_state()

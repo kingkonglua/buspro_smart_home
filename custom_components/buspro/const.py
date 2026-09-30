@@ -27,6 +27,9 @@ CONF_CHANNEL = "channel"
 CONF_SUBTYPE = "subtype"
 CONF_AC_NUMBER = "ac_number"
 CONF_TRAVEL_TIME = "travel_time"
+# Scene platform: HDL scene = (area_number, scene_number) triggered at a device.
+CONF_AREA_NUMBER = "area_number"
+CONF_SCENE_NUMBER = "scene_number"
 
 # Device types
 DEVICE_TYPE_LIGHT = "light"
@@ -36,6 +39,7 @@ DEVICE_TYPE_SENSOR = "sensor"
 DEVICE_TYPE_CLIMATE = "climate"
 DEVICE_TYPE_COVER = "cover"
 DEVICE_TYPE_BUTTON = "button"
+DEVICE_TYPE_SCENE = "scene"
 
 DEVICE_TYPES = [
     DEVICE_TYPE_LIGHT,
@@ -45,6 +49,7 @@ DEVICE_TYPES = [
     DEVICE_TYPE_CLIMATE,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_BUTTON,
+    DEVICE_TYPE_SCENE,
 ]
 
 # Binary sensor subtypes
@@ -73,6 +78,8 @@ COVER_SUBTYPES = [
 CLIMATE_SUBTYPES = [
     "floor_heating",
     "ac",
+    # 触控面板（Enviro / Granite）空调页，见 pybuspro/devices/panel_ac.py
+    "ac_panel",
 ]
 
 # Scan classification types (discovery.py). These are *not* platform device

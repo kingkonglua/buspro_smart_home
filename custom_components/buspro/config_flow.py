@@ -35,6 +35,8 @@ from .const import (
     CONF_SUBTYPE,
     CONF_AC_NUMBER,
     CONF_TRAVEL_TIME,
+    CONF_AREA_NUMBER,
+    CONF_SCENE_NUMBER,
     DEVICE_TYPES,
     DEVICE_TYPE_LIGHT,
     DEVICE_TYPE_SWITCH,
@@ -43,6 +45,7 @@ from .const import (
     DEVICE_TYPE_CLIMATE,
     DEVICE_TYPE_COVER,
     DEVICE_TYPE_BUTTON,
+    DEVICE_TYPE_SCENE,
     BINARY_SENSOR_SUBTYPES,
     SENSOR_SUBTYPES,
     COVER_SUBTYPES,
@@ -632,6 +635,8 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_add_cover()
             elif device_type == DEVICE_TYPE_BUTTON:
                 return await self.async_step_add_button()
+            elif device_type == DEVICE_TYPE_SCENE:
+                return await self.async_step_add_scene()
 
         return self.async_show_form(
             step_id="add_device",
@@ -841,13 +846,16 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_add_climate(self, user_input=None):
-        """Step: add a climate device (floor heating or AC module)."""
+        """Step: add a climate device (floor heating, AC module or panel AC)."""
         errors = {}
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
             subtype = user_input[CONF_SUBTYPE]
             ac_number = user_input.get(CONF_AC_NUMBER, 1)
+            # Only meaningful for the ac_panel subtype: which panel channel
+            # carries the room-temperature reading (0 disables it).
+            channel = user_input.get(CONF_CHANNEL, 1)
             key = f"{DEVICE_TYPE_CLIMATE}_{subnet}_{dev_id}_{subtype}_{ac_number}"
 
             if key in self.devices:
@@ -859,6 +867,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                     CONF_DEVICE_ID: dev_id,
                     CONF_SUBTYPE: subtype,
                     CONF_AC_NUMBER: ac_number,
+                    CONF_CHANNEL: channel,
                     "name": user_input.get("name", f"Climate {subnet}-{dev_id}"),
                 }
                 return await self.async_step_init()
@@ -870,6 +879,44 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(CONF_DEVICE_ID): int,
                 vol.Required(CONF_SUBTYPE): vol.In(CLIMATE_SUBTYPES),
                 vol.Optional(CONF_AC_NUMBER, default=1): int,
+                vol.Optional(CONF_CHANNEL, default=1): int,
+                vol.Optional("name", default=""): str,
+            }),
+            errors=errors,
+        )
+
+    async def async_step_add_scene(self, user_input=None):
+        """Step: add a scene device (area_number.scene_number on a device)."""
+        errors = {}
+        if user_input is not None:
+            subnet = user_input[CONF_SUBNET_ID]
+            dev_id = user_input[CONF_DEVICE_ID]
+            area_number = user_input[CONF_AREA_NUMBER]
+            scene_number = user_input[CONF_SCENE_NUMBER]
+            key = f"{DEVICE_TYPE_SCENE}_{subnet}_{dev_id}_{area_number}_{scene_number}"
+
+            if key in self.devices:
+                errors["base"] = "该设备已存在"
+            else:
+                self.devices[key] = {
+                    CONF_DEVICE_TYPE: DEVICE_TYPE_SCENE,
+                    CONF_SUBNET_ID: subnet,
+                    CONF_DEVICE_ID: dev_id,
+                    CONF_AREA_NUMBER: area_number,
+                    CONF_SCENE_NUMBER: scene_number,
+                    "name": user_input.get(
+                        "name", f"Scene {subnet}-{dev_id} {area_number}.{scene_number}"
+                    ),
+                }
+                return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="add_scene",
+            data_schema=vol.Schema({
+                vol.Required(CONF_SUBNET_ID): int,
+                vol.Required(CONF_DEVICE_ID): int,
+                vol.Required(CONF_AREA_NUMBER): int,
+                vol.Required(CONF_SCENE_NUMBER): int,
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
