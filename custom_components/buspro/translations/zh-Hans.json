@@ -45,6 +45,10 @@
           "sensor_subtypes": "传感器子类型"
         }
       },
+      "scan_bus_no_devices": {
+        "title": "未发现设备",
+        "description": "总线扫描完成，但没有设备响应。请检查接线后重试。"
+      },
       "add_device": {
         "title": "添加设备",
         "description": "请选择要添加的设备类型。",

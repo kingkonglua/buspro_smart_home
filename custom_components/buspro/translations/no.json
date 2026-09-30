@@ -45,6 +45,10 @@
           "sensor_subtypes": "Sensorundertype"
         }
       },
+      "scan_bus_no_devices": {
+        "title": "Ingen enheter funnet",
+        "description": "Busskanningen fullførte, men ingen enheter svarte. Kontroller kablingen og prøv igjen."
+      },
       "add_device": {
         "title": "Legg til enhet",
         "description": "Velg hvilken type enhet som skal legges til.",

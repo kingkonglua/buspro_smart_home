@@ -45,6 +45,10 @@
           "sensor_subtypes": "Sensor subtype"
         }
       },
+      "scan_bus_no_devices": {
+        "title": "No devices found",
+        "description": "The bus scan finished, but no devices responded. Check the wiring and try again."
+      },
       "add_device": {
         "title": "Add Device",
         "description": "Select the type of device to add.",
