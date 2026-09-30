@@ -147,6 +147,50 @@ _LOAD_RESPONSE_OPS = {
     "ReadAcStatusResponse",
 }
 
+# Fallback map: raw hardware device-type code (2 bytes in the telegram header,
+# formatted "0xHHHH") -> scan classification type. It is consulted ONLY when
+# no reply operate code identified the device (see infer_device_type); reply
+# operate codes stay the primary signal because a module can answer an
+# unrelated probe. Without this map a module that never answers a probe is
+# guessed as a plain switch no matter what hardware it is.
+#
+# Every code below is a factual hardware id. The first block mirrors the
+# DeviceType enum in pybuspro/helpers/enums.py (MIT, this repository); the
+# extra codes are modules identified on real installations and documented in
+# the upstream const.py type table (facts only, no upstream code copied).
+HDL_TYPE_TO_DEVICE_TYPE: dict[str, str] = {
+    # -- from pybuspro/helpers/enums.py DeviceType enum --
+    "0x0011": DEVICE_TYPE_CLIMATE,        # SB_DN_6B0_10v heating relay
+    "0x0086": DEVICE_TYPE_CLIMATE,        # SB_DLP2 panel
+    "0x0095": DEVICE_TYPE_CLIMATE,        # SB_DLP panel
+    "0x009C": DEVICE_TYPE_CLIMATE,        # SB_DLP_v2 panel
+    "0x0134": DEVICE_TYPE_SENSOR,         # SB_CMS_12in1 sensor
+    "0x0135": DEVICE_TYPE_SENSOR,         # SB_CMS_8in1 sensor
+    "0x0150": DEVICE_TYPE_SENSOR,         # HDL_MSP07M sensors-in-one
+    "0x0260": DEVICE_TYPE_LIGHT,          # SB_DN_DT0601 6ch dimmer
+    "0x026D": DEVICE_TYPE_LIGHT,          # HDL_MDT0601 6ch dimmer
+    "0x01AC": DEVICE_TYPE_SWITCH,         # SB_DN_R0816 relay
+    "0x0077": DEVICE_TYPE_BINARY_SENSOR,  # SB_DRY_4Z dry contact
+    # -- additional hardware reported upstream (facts only) --
+    "0x0073": DEVICE_TYPE_BINARY_SENSOR,  # 4-zone dry contact input module
+    "0x0166": DEVICE_TYPE_BINARY_SENSOR,  # HDL-MS24.232 24-zone dry contact
+    "0x0138": DEVICE_TYPE_SENSOR,         # CMS sensor (temp / lux / motion)
+    "0x0148": DEVICE_TYPE_SENSOR,         # HDL-MSP07M.4C sensors-in-one
+    "0x25E5": DEVICE_TYPE_CURTAIN,        # curtain module
+    "0x25E8": DEVICE_TYPE_CURTAIN,        # curtain module
+    "0x02C9": DEVICE_TYPE_CURTAIN,        # HDL-MW02.431 2ch curtain controller
+}
+
+# Zone count for dedicated dry-contact input modules, by type code. A module
+# listed here imports as one binary_sensor per zone (channel = zone number).
+# A dry-contact module that isn't listed still gets its zone count harvested
+# from the highest zone number that answers ReadDryContactStatus during a scan.
+HDL_DRY_CONTACT_ZONES: dict[str, int] = {
+    "0x0073": 4,    # 4-zone dry contact input module
+    "0x0077": 4,    # SB_DRY_4Z
+    "0x0166": 24,   # HDL-MS24.232 (SB-DN-DRY-24Z)
+}
+
 
 @dataclass
 class DiscoveredDevice:
@@ -205,6 +249,16 @@ class DiscoveredDevice:
         )
 
 
+def dry_contact_zone_count(dev: DiscoveredDevice) -> int:
+    """Return how many zones a dry-contact module exposes (always >= 1).
+
+    Prefer the known zone count for the hardware type code, then the highest
+    zone number observed on the bus, and finally a single zone so an
+    unidentified module still imports as one entity.
+    """
+    return HDL_DRY_CONTACT_ZONES.get(dev.type_code) or dev.channel_count or 1
+
+
 def infer_device_type(dev: DiscoveredDevice) -> str | None:
     """Classify a discovered device into a scan classification type.
 
@@ -250,6 +304,13 @@ def infer_device_type(dev: DiscoveredDevice) -> str | None:
         # Channel device. Intermediate brightness levels are dimmer evidence;
         # otherwise treat as a plain switch (user can flip the type later).
         return DEVICE_TYPE_LIGHT if dev.dimmer_evidence else DEVICE_TYPE_SWITCH
+    # No reply identified the module: fall back to the hardware type-code map
+    # before the generic switch guess. The reply-operate-code checks above
+    # always win, so this can only make silently-discovered modules *more*
+    # accurate, never override a positive reply.
+    mapped = HDL_TYPE_TO_DEVICE_TYPE.get(dev.type_code)
+    if mapped is not None:
+        return mapped
     # Nothing conclusive from replies: treat as a plain switch so the module
     # still surfaces and the user can flip its type afterwards.
     return DEVICE_TYPE_SWITCH
@@ -337,6 +398,17 @@ class BusScanner:
                         level = -1
                     if 1 <= level <= 254 and level != 100:
                         dev.dimmer_evidence = True
+            # Dry-contact replies (payload: [.., switch_number, status]). The
+            # highest switch number that answers is the module's zone count,
+            # used to split a multi-zone module into one entity per zone.
+            elif op_name == "ReadDryContactStatusResponse":
+                if len(payload) >= 2:
+                    try:
+                        zone = int(payload[1])
+                    except (TypeError, ValueError):
+                        zone = 0
+                    if 1 <= zone <= 64:
+                        dev.channel_count = max(dev.channel_count or 0, zone)
             # Curtain replies (payload: curtain_number, status). The highest
             # curtain number that answers tells us how many curtains the
             # module drives, so import can split them into separate covers.

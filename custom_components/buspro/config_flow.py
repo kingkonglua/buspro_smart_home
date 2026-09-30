@@ -572,24 +572,45 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                     if "universal_switch" in BINARY_SENSOR_SUBTYPES
                     else BINARY_SENSOR_SUBTYPES[0]
                 )
+                key = f"{DEVICE_TYPE_BINARY_SENSOR}_{s}_{d}_1_{subtype}"
+                configs.append((
+                    key,
+                    {
+                        CONF_DEVICE_TYPE: DEVICE_TYPE_BINARY_SENSOR,
+                        CONF_SUBNET_ID: s,
+                        CONF_DEVICE_ID: d,
+                        CONF_CHANNEL: 1,
+                        CONF_SUBTYPE: subtype,
+                        "name": f"HDL {disc.address} binary_sensor",
+                    },
+                ))
             else:
+                # A dry-contact input module drives several independent zones
+                # (one per switch number), so split it into one binary sensor
+                # per zone -- channel = zone number, which the platform polls
+                # with ReadDryContactStatus(switch_number=channel). Without
+                # this a 4-zone module imported as a single dead entity.
+                from .discovery import dry_contact_zone_count
+
                 subtype = (
                     "dry_contact"
                     if "dry_contact" in BINARY_SENSOR_SUBTYPES
                     else BINARY_SENSOR_SUBTYPES[0]
                 )
-            key = f"{DEVICE_TYPE_BINARY_SENSOR}_{s}_{d}_1_{subtype}"
-            configs.append((
-                key,
-                {
-                    CONF_DEVICE_TYPE: DEVICE_TYPE_BINARY_SENSOR,
-                    CONF_SUBNET_ID: s,
-                    CONF_DEVICE_ID: d,
-                    CONF_CHANNEL: 1,
-                    CONF_SUBTYPE: subtype,
-                    "name": f"HDL {disc.address} binary_sensor",
-                },
-            ))
+                zones = dry_contact_zone_count(disc)
+                for zone in range(1, zones + 1):
+                    key = f"{DEVICE_TYPE_BINARY_SENSOR}_{s}_{d}_{zone}_{subtype}"
+                    configs.append((
+                        key,
+                        {
+                            CONF_DEVICE_TYPE: DEVICE_TYPE_BINARY_SENSOR,
+                            CONF_SUBNET_ID: s,
+                            CONF_DEVICE_ID: d,
+                            CONF_CHANNEL: zone,
+                            CONF_SUBTYPE: subtype,
+                            "name": f"HDL {disc.address} zone{zone}",
+                        },
+                    ))
         else:
             # switch / light: split into one entry per known channel.
             dtype = (
