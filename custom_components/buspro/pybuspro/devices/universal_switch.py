@@ -14,8 +14,30 @@ class UniversalSwitch(Device):
         self._device_address = device_address
         self._switch_number = switch_number
         self._switch_status = SwitchStatusOnOff.OFF
+        # N-1: constructing the device must have no bus side effects.  The
+        # set_universal_switch service builds objects per call and drops them;
+        # registering a telegram callback from __init__ (plain append on the
+        # shared Buspro, no dedupe) leaked one callback *and* one fire-and-forget
+        # ReadStatusOfUniversalSwitch telegram per call.  Registration is now
+        # explicit and idempotent, so a cached object registers exactly once.
+        self._status_updates_enabled = False
+
+    def enable_status_updates(self):
+        """Register for inbound status telegrams and read once. Idempotent.
+
+        Called once on the object that the service caches; a second call is a
+        no-op so no duplicate bus callback or read telegram is produced.
+        """
+        if self._status_updates_enabled:
+            return
+        self._status_updates_enabled = True
         self.register_telegram_received_cb(self._telegram_received_cb)
         self._call_read_current_status_of_universal_switch(run_from_init=True)
+
+    def disable_status_updates(self):
+        """Detach this device's telegram callback(s) from the bus. Idempotent."""
+        self._status_updates_enabled = False
+        self.unregister_all_telegram_received_cbs()
 
     def _telegram_received_cb(self, telegram):
         if telegram.payload is None:

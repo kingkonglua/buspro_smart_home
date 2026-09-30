@@ -198,6 +198,49 @@ def _get_first_gateway(hass: HomeAssistant):
     return get_buspro_module(hass)
 
 
+def _universal_switch_cache_key(buspro_module, device_address, switch_number):
+    """Identity of one universal-switch channel on one gateway.
+
+    The entry id is part of the key on purpose: services resolve the *first*
+    gateway today, but two gateways can still expose the same ``(subnet,
+    device)`` address, so without it their switch objects (and callbacks) would
+    collide and share state across gateways.
+    """
+    return (
+        getattr(buspro_module, "entry_id", None),
+        device_address[0],
+        device_address[1],
+        switch_number,
+    )
+
+
+def _get_cached_universal_switch(buspro_module, device_address, switch_number):
+    """Return the reusable UniversalSwitch for this channel, creating it once.
+
+    N-1: ``UniversalSwitch.__init__`` used to register a telegram callback and
+    schedule a read on every construction, so the service leaked one callback
+    and one extra read telegram per call.  The object is cached per gateway and
+    enabled exactly once; ``BusproModule.stop`` tears the whole cache down.
+    """
+    # noinspection PyUnresolvedReferences
+    from .pybuspro.devices.universal_switch import UniversalSwitch
+
+    cache = getattr(buspro_module, "_universal_switches", None)
+    if cache is None:
+        cache = {}
+        buspro_module._universal_switches = cache
+
+    key = _universal_switch_cache_key(buspro_module, device_address, switch_number)
+    universal_switch = cache.get(key)
+    if universal_switch is None:
+        universal_switch = UniversalSwitch(
+            buspro_module.hdl, device_address, switch_number
+        )
+        universal_switch.enable_status_updates()
+        cache[key] = universal_switch
+    return universal_switch
+
+
 def _register_services(hass: HomeAssistant) -> None:
     """Register HDL Buspro services once, idempotently.
 
@@ -243,9 +286,6 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def _set_universal_switch(call):
         """Service for setting a universal switch."""
-        # noinspection PyUnresolvedReferences
-        from .pybuspro.devices.universal_switch import UniversalSwitch
-
         buspro_module = _get_first_gateway(hass)
         if buspro_module is None:
             _LOGGER.error("No Buspro gateway available for %s",
@@ -253,8 +293,12 @@ def _register_services(hass: HomeAssistant) -> None:
             return
         attr_address = call.data.get(SERVICE_BUSPRO_ATTR_ADDRESS)
         attr_switch_number = call.data.get(SERVICE_BUSPRO_ATTR_SWITCH_NUMBER)
-        universal_switch = UniversalSwitch(buspro_module.hdl, attr_address,
-                                           attr_switch_number)
+        # N-1: reuse the cached object instead of constructing a fresh
+        # UniversalSwitch on every call (which leaked a telegram callback and a
+        # redundant read telegram each time).  The callback is registered once.
+        universal_switch = _get_cached_universal_switch(
+            buspro_module, attr_address, attr_switch_number
+        )
         status = call.data.get(SERVICE_BUSPRO_ATTR_STATUS)
         if status == 1:
             await universal_switch.set_on()
@@ -459,6 +503,10 @@ class BusproModule:
         self._stop_listener_unsub = None
         self._stop_requested = False
         self._reconnect_task = None
+        # N-1: per-gateway cache of UniversalSwitch objects created by the
+        # set_universal_switch service, so each channel registers its telegram
+        # callback once instead of once per service call.  Cleared in stop().
+        self._universal_switches = {}
         self.gateway_address_send_receive = ((host, port), ('', port))
         self.init_hdl()
 
@@ -734,6 +782,25 @@ class BusproModule:
         )
         self.connected = True
 
+    def _teardown_universal_switches(self):
+        """Detach and drop every cached UniversalSwitch on this gateway.
+
+        N-1: the service caches UniversalSwitch objects so their telegram
+        callbacks register once.  Without this teardown the cache (and the
+        bound-method callbacks it holds on ``hdl``) would survive an
+        unload/reload and the leak would simply move from per-call to
+        per-module-lifetime.
+        """
+        cache = getattr(self, "_universal_switches", None)
+        if not cache:
+            return
+        for universal_switch in list(cache.values()):
+            try:
+                universal_switch.unregister_all_telegram_received_cbs()
+            except Exception as err:  # noqa: BLE001 - teardown must not abort
+                _LOGGER.debug("Could not detach universal-switch callback: %s", err)
+        cache.clear()
+
     # noinspection PyUnusedLocal
     async def stop(self, event=None):
         """Stop Buspro object. Disconnect from tunneling device."""
@@ -753,6 +820,7 @@ class BusproModule:
         if unsub is not None:
             self._stop_listener_unsub = None
             unsub()
+        self._teardown_universal_switches()
         await self.hdl.stop()
 
     def register_services(self):
