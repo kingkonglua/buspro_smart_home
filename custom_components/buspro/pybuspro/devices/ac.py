@@ -61,6 +61,8 @@ class AC(Device):
         self._call_read_current_status(run_from_init=True)
 
     def _telegram_received_cb(self, telegram):
+        if telegram.payload is None:
+            return
         if telegram.operate_code == OperateCode.ReadAcStatusResponse or \
                 telegram.operate_code == OperateCode.ControlAcStatusResponse:
             self._apply_status_payload(telegram.payload)

@@ -134,9 +134,31 @@ class Device(object):
     #     await self._buspro.network_interface.send_control(control)
 
     def _call_device_updated(self):
+        # BUG-6: device callbacks can fire before the event loop is running (or
+        # after it has closed) during setup / teardown / reconnect. Scheduling a
+        # coroutine then raises RuntimeError, which used to bubble out of the
+        # telegram dispatch path and silently drop the state update. Degrade
+        # safely instead of breaking frame distribution.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self._buspro.logger.debug(
+                "No running event loop; skipping device-updated broadcast"
+            )
+            return
         self._update_task = asyncio.ensure_future(self._device_updated())
 
     def _call_read_current_status_of_channels(self, run_from_init=False):
+        # BUG-6: same guard as _call_device_updated. This is called from
+        # Light/Switch __init__ (run_from_init=True) and from the scene-callback
+        # dispatch path, both of which can run without an active loop.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self._buspro.logger.debug(
+                "No running event loop; skipping channel status read"
+            )
+            return
 
         async def read_current_state_of_channels():
             if run_from_init:
