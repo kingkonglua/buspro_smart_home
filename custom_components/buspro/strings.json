@@ -2,20 +2,20 @@
   "config": {
     "step": {
       "user": {
-        "title": "HDL Buspro 网关",
-        "description": "自动发现局域网中的 HDL Buspro 网关（共 {count} 个），选择后继续配置；也可手动输入 IP 和端口。",
+        "title": "HDL Buspro Gateway",
+        "description": "Auto-detect HDL Buspro gateways on the local network and pick one of {count}, or enter the IP and port manually.",
         "data": {
-          "gateway_choice": "选择已发现的网关 IP",
-          "host": "网关 IP 地址",
-          "port": "端口号"
+          "gateway_choice": "Discovered gateway IP",
+          "host": "Host IP address",
+          "port": "Port number"
         }
       },
       "manual": {
-        "title": "手动输入网关地址",
-        "description": "输入 HDL Buspro 网关的 IP 地址和端口号。",
+        "title": "Enter Gateway Address Manually",
+        "description": "Enter the HDL Buspro gateway IP address and port.",
         "data": {
-          "host": "IP 地址",
-          "port": "端口号"
+          "host": "IP address",
+          "port": "Port number"
         }
       },
       "init": {
@@ -165,30 +165,30 @@
       "unknown": "Unknown device"
     },
     "progress": {
-      "bus_scan": "正在扫描总线，剩余 {seconds_left} 秒…",
-      "bus_scan_confirming": "总线扫描完成，正在确认设备信息，请稍候…",
-      "scan_bus_devices": "扫描完成，正在载入发现的设备…",
-      "scan_bus_no_devices": "扫描完成，未在总线上发现设备。"
+      "bus_scan": "Scanning the bus, {seconds_left} s remaining…",
+      "bus_scan_confirming": "Bus scan complete, confirming discovered devices…",
+      "scan_bus_devices": "Scan complete, loading discovered devices…",
+      "scan_bus_no_devices": "Scan complete, no devices found on the bus."
     },
     "abort": {
-      "already_configured": "该网关已配置。",
-      "gateway_unavailable": "网关不可达，无法继续。",
-      "scan_failed": "扫描失败，请检查网络连接后重试。",
-      "no_devices_found": "未发现设备，请检查网关配置和总线连接。"
+      "already_configured": "This gateway is already configured.",
+      "gateway_unavailable": "Gateway unavailable, cannot continue.",
+      "scan_failed": "Scan failed, check network connection and retry.",
+      "no_devices_found": "No devices found, check gateway configuration and bus connection."
     },
     "error": {
-      "already_exists": "设备 {device_key} 已存在，不能重复添加。",
-      "gateway_unavailable": "网关不可达，无法继续。",
-      "unknown": "发生未知错误。"
+      "already_exists": "Device {device_key} already exists and cannot be added again.",
+      "gateway_unavailable": "Gateway unavailable, cannot continue.",
+      "unknown": "An unknown error occurred."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "集成操作",
-        "description": "选择一项操作：",
+        "title": "HDL Buspro Device Management",
+        "description": "Current devices:\n{devices}\n\nSelect an action:",
         "data": {
-          "action": "操作类型",
+          "action": "Action",
           "add": "Add device",
           "scan_bus": "Scan bus for devices",
           "remove": "Remove device",
@@ -289,17 +289,17 @@
         }
       },
       "remove_device": {
-        "title": "移除设备",
-        "description": "选择要移除的设备：",
+        "title": "Remove Device",
+        "description": "Select a device to remove.",
         "data": {
-          "device": "要移除的设备"
+          "device": "Device"
         }
       },
       "scan_bus": {
-        "title": "扫描总线设备",
-        "description": "开始扫描总线上的所有设备，扫描完成后展示结果供勾选导入。",
+        "title": "Scan Bus Devices",
+        "description": "Start scanning the bus for all devices. After scanning, the results will be shown for import.",
         "data": {
-          "scan_duration": "扫描时长（秒）"
+          "scan_duration": "Scan duration (seconds)"
         }
       },
       "scan_bus_no_devices": {
@@ -307,11 +307,11 @@
         "description": "The bus scan finished but found no devices. Check the gateway configuration and bus connection."
       },
       "scan_bus_devices": {
-        "title": "选择要导入的设备",
+        "title": "Select Devices to Import",
         "description": "Select devices to import. Devices marked ✓ already exist. For sensors, choose subtype (temperature, illuminance or humidity) per device.",
         "data": {
-          "devices": "要导入的设备",
-          "sensor_subtypes": "传感器子类型",
+          "devices": "Devices to import",
+          "sensor_subtypes": "Sensor subtype",
           "temperature": "Temperature sensor",
           "illuminance": "Illuminance sensor",
           "humidity": "Humidity sensor"
@@ -320,72 +320,72 @@
     },
     "progress": {
       "bus_scan": {
-        "title": "总线扫描中...",
-        "description": "正在向总线发送探测请求并收集设备响应，请稍候。"
+        "title": "Scanning bus...",
+        "description": "Sending probe requests to the bus and collecting device responses, please wait."
       },
       "bus_scan_confirming": {
-        "title": "确认设备信息...",
-        "description": "正在验证扫描到的设备数据，请稍候。"
+        "title": "Confirming devices...",
+        "description": "Verifying scanned device data, please wait."
       }
     },
     "abort": {
-      "gateway_unavailable": "网关不可达，无法继续。",
-      "scan_failed": "扫描失败，请检查网络连接后重试。",
-      "no_devices_found": "未发现设备，请检查网关配置和总线连接。"
+      "gateway_unavailable": "Gateway unavailable, cannot continue.",
+      "scan_failed": "Scan failed, check network connection and retry.",
+      "no_devices_found": "No devices found, check gateway configuration and bus connection."
     },
     "error": {
-      "already_exists": "设备 {device_key} 已存在，不能重复添加。",
-      "gateway_unavailable": "网关不可达，无法继续。"
+      "already_exists": "Device {device_key} already exists and cannot be added again.",
+      "gateway_unavailable": "Gateway unavailable, cannot continue."
     }
   },
   "services": {
     "activate_scene": {
-      "name": "激活场景",
-      "description": "在 HDL Buspro 总线上激活场景：向指定设备地址发送场景控制指令，使目标设备执行指定的区域/场景。",
+      "name": "Activate scene",
+      "description": "Activate a scene on the HDL Buspro bus: send a scene-control command to the given device address so the target device runs the specified area/scene.",
       "fields": {
         "address": {
-          "name": "设备地址",
-          "description": "目标设备地址，格式为 [子网 ID, 设备 ID]，例如 [1, 42]。"
+          "name": "Address",
+          "description": "Target device address as [subnet id, device id], e.g. [1, 42]."
         },
         "scene_address": {
-          "name": "场景地址",
-          "description": "要激活的区域与场景编号，格式为 [区域编号, 场景编号]，例如 [1, 1]。"
+          "name": "Scene address",
+          "description": "Area and scene number to activate as [area number, scene number], e.g. [1, 1]."
         }
       }
     },
     "send_message": {
-      "name": "发送消息",
-      "description": "发送一条原始 HDL Buspro 控制报文，可自定义操作码与负载，用于没有专用服务覆盖的高级/手动设备控制。",
+      "name": "Send message",
+      "description": "Send a raw HDL Buspro control message with a custom operate code and payload. Use for advanced or manual device control not covered by the dedicated services.",
       "fields": {
         "address": {
-          "name": "设备地址",
-          "description": "目标设备地址，格式为 [子网 ID, 设备 ID]，例如 [1, 42]。"
+          "name": "Address",
+          "description": "Target device address as [subnet id, device id], e.g. [1, 42]."
         },
         "operate_code": {
-          "name": "操作码",
-          "description": "HDL Buspro 操作码，格式为 [高字节, 低字节]，例如 [1, 1]。"
+          "name": "Operate code",
+          "description": "HDL Buspro operate code as [high byte, low byte], e.g. [1, 1]."
         },
         "payload": {
-          "name": "负载",
-          "description": "要发送的负载字节，例如 [1, 100]。"
+          "name": "Payload",
+          "description": "Payload bytes to send, e.g. [1, 100]."
         }
       }
     },
     "set_universal_switch": {
-      "name": "设置万能开关",
-      "description": "打开或关闭万能开关输出：status 为 1 时打开，为 0 时关闭。",
+      "name": "Set universal switch",
+      "description": "Turn a universal switch output on or off: status 1 turns it on, status 0 turns it off.",
       "fields": {
         "address": {
-          "name": "设备地址",
-          "description": "目标设备地址，格式为 [子网 ID, 设备 ID]，例如 [1, 42]。"
+          "name": "Address",
+          "description": "Target device address as [subnet id, device id], e.g. [1, 42]."
         },
         "switch_number": {
-          "name": "开关编号",
-          "description": "要控制的万能开关编号（1-255）。"
+          "name": "Switch number",
+          "description": "Universal switch number to control (1-255)."
         },
         "status": {
-          "name": "状态",
-          "description": "目标状态：1 表示打开，0 表示关闭。"
+          "name": "Status",
+          "description": "Desired state: 1 for on, 0 for off."
         }
       }
     }
