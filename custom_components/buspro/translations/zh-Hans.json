@@ -139,6 +139,10 @@
           "scan_duration": "扫描时长（秒）"
         }
       },
+      "scan_bus_no_devices": {
+        "title": "未发现设备",
+        "description": "总线扫描已完成，但未发现任何设备。请检查网关配置和总线连接。"
+      },
       "scan_bus_devices": {
         "title": "选择要导入的设备",
         "description": "勾选希望添加的设备。传感器可单独选择子类型（温度或亮度），然后提交。",

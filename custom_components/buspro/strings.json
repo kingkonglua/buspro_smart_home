@@ -139,6 +139,10 @@
           "scan_duration": "扫描时长（秒）"
         }
       },
+      "scan_bus_no_devices": {
+        "title": "No Devices Found",
+        "description": "The bus scan finished but found no devices. Check the gateway configuration and bus connection."
+      },
       "scan_bus_devices": {
         "title": "选择要导入的设备",
         "description": "Select devices to import. For sensors, choose subtype (temperature or illuminance) per device.",

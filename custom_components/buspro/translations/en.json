@@ -139,6 +139,10 @@
           "scan_duration": "Scan duration (seconds)"
         }
       },
+      "scan_bus_no_devices": {
+        "title": "No Devices Found",
+        "description": "The bus scan finished but found no devices. Check the gateway configuration and bus connection."
+      },
       "scan_bus_devices": {
         "title": "Select Devices to Import",
         "description": "Select devices you want to add. For sensors, choose the subtype (temperature or illuminance) per device, then submit.",
