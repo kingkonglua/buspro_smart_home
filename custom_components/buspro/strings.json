@@ -171,5 +171,57 @@
       "already_exists": "设备 {device_key} 已存在，不能重复添加。",
       "gateway_unavailable": "网关不可达，无法继续。"
     }
+  },
+  "services": {
+    "activate_scene": {
+      "name": "激活场景",
+      "description": "在 HDL Buspro 总线上激活场景：向指定设备地址发送场景控制指令，使目标设备执行指定的区域/场景。",
+      "fields": {
+        "address": {
+          "name": "设备地址",
+          "description": "目标设备地址，格式为 [子网 ID, 设备 ID]，例如 [1, 42]。"
+        },
+        "scene_address": {
+          "name": "场景地址",
+          "description": "要激活的区域与场景编号，格式为 [区域编号, 场景编号]，例如 [1, 1]。"
+        }
+      }
+    },
+    "send_message": {
+      "name": "发送消息",
+      "description": "发送一条原始 HDL Buspro 控制报文，可自定义操作码与负载，用于没有专用服务覆盖的高级/手动设备控制。",
+      "fields": {
+        "address": {
+          "name": "设备地址",
+          "description": "目标设备地址，格式为 [子网 ID, 设备 ID]，例如 [1, 42]。"
+        },
+        "operate_code": {
+          "name": "操作码",
+          "description": "HDL Buspro 操作码，格式为 [高字节, 低字节]，例如 [1, 1]。"
+        },
+        "payload": {
+          "name": "负载",
+          "description": "要发送的负载字节，例如 [1, 100]。"
+        }
+      }
+    },
+    "set_universal_switch": {
+      "name": "设置万能开关",
+      "description": "打开或关闭万能开关输出：status 为 1 时打开，为 0 时关闭。",
+      "fields": {
+        "address": {
+          "name": "设备地址",
+          "description": "目标设备地址，格式为 [子网 ID, 设备 ID]，例如 [1, 42]。"
+        },
+        "switch_number": {
+          "name": "开关编号",
+          "description": "要控制的万能开关编号（1-8）。"
+        },
+        "status": {
+          "name": "状态",
+          "description": "目标状态：1 表示打开，0 表示关闭。"
+        }
+      }
+    }
   }
 }

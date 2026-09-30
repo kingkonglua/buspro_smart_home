@@ -171,5 +171,57 @@
       "already_exists": "Device {device_key} already exists and cannot be added again.",
       "gateway_unavailable": "Gateway unavailable, cannot continue."
     }
+  },
+  "services": {
+    "activate_scene": {
+      "name": "Activate scene",
+      "description": "Activate a scene on the HDL Buspro bus: send a scene-control command to the given device address so the target device runs the specified area/scene.",
+      "fields": {
+        "address": {
+          "name": "Address",
+          "description": "Target device address as [subnet id, device id], e.g. [1, 42]."
+        },
+        "scene_address": {
+          "name": "Scene address",
+          "description": "Area and scene number to activate as [area number, scene number], e.g. [1, 1]."
+        }
+      }
+    },
+    "send_message": {
+      "name": "Send message",
+      "description": "Send a raw HDL Buspro control message with a custom operate code and payload. Use for advanced or manual device control not covered by the dedicated services.",
+      "fields": {
+        "address": {
+          "name": "Address",
+          "description": "Target device address as [subnet id, device id], e.g. [1, 42]."
+        },
+        "operate_code": {
+          "name": "Operate code",
+          "description": "HDL Buspro operate code as [high byte, low byte], e.g. [1, 1]."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "Payload bytes to send, e.g. [1, 100]."
+        }
+      }
+    },
+    "set_universal_switch": {
+      "name": "Set universal switch",
+      "description": "Turn a universal switch output on or off: status 1 turns it on, status 0 turns it off.",
+      "fields": {
+        "address": {
+          "name": "Address",
+          "description": "Target device address as [subnet id, device id], e.g. [1, 42]."
+        },
+        "switch_number": {
+          "name": "Switch number",
+          "description": "Universal switch number to control (1-8)."
+        },
+        "status": {
+          "name": "Status",
+          "description": "Desired state: 1 for on, 0 for off."
+        }
+      }
+    }
   }
 }
