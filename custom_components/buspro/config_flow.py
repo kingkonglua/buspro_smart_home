@@ -205,6 +205,19 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
         self._scan_task = None
         self._scan_started = 0.0
         self._scan_duration = DEFAULT_SCAN_DURATION
+        self._scan_cleanup_registered = False
+
+    def _cancel_scan_task(self):
+        """Cancel a still-running bus scan (flow closed/cancelled/re-entered).
+
+        Without this, closing the options dialog mid-scan leaves the task
+        running to completion (bounded by its own watchdog) with no owner; it
+        is registered on the flow via async_on_remove so HA runs it when the
+        flow finishes.
+        """
+        if self._scan_task is not None and not self._scan_task.done():
+            self._scan_task.cancel()
+        self._scan_task = None
 
     def _ensure_devices_loaded(self):
         """Lazy load devices from config entry options."""
@@ -301,6 +314,11 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 ),
                 name=f"{DOMAIN} bus scan",
             )
+            if not self._scan_cleanup_registered:
+                on_remove = getattr(self, "async_on_remove", None)
+                if on_remove is not None:
+                    on_remove(self._cancel_scan_task)
+                self._scan_cleanup_registered = True
 
         if self._scan_task is not None:
             if not self._scan_task.done():

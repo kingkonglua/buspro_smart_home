@@ -96,28 +96,15 @@ _DIRECTED_LISTEN = 2.0
 # instead of hardcoding a second copy of this number.
 DIRECTED_PHASE_MAX_SECONDS = 20.0
 _DIRECTED_MAX_SECONDS = DIRECTED_PHASE_MAX_SECONDS
-# Typical directed-phase duration on a normal-sized bus: two rounds, each
-# followed by a fixed listen pause, regardless of how many devices answered.
-DIRECTED_PHASE_TYPICAL_SECONDS = _DIRECTED_ROUNDS * _DIRECTED_LISTEN
 # Extra time (beyond the user's listen duration) that scan() may need for the
 # directed phase. The config flow's watchdog timeout must allow for this.
 SCAN_TIMEOUT_MARGIN = DIRECTED_PHASE_MAX_SECONDS + 5.0
 
-# Device classification by *reply* operate code (raw bytes), as specified by
-# the task spec. 'curtain' and 'ac' are ours -- marsh cannot identify either.
-# These are *classification* types: the config flow converts 'curtain' to a
-# cover with subtype curtain_module and 'ac' to a climate with subtype ac.
-DEVICE_TYPE_BY_RESPONSE: dict[bytes, str] = {
-    b"\x00\x34": DEVICE_TYPE_SWITCH,        # 继电器/调光器通道
-    b"\x16\x46": DEVICE_TYPE_SENSOR,        # 传感器
-    b"\x16\x05": DEVICE_TYPE_SENSOR,        # 多功能传感器
-    b"\x19\x45": DEVICE_TYPE_CLIMATE,       # 地暖/温控
-    b"\x15\xCF": DEVICE_TYPE_BINARY_SENSOR, # 干接点
-    b"\xE0\x19": DEVICE_TYPE_BINARY_SENSOR, # 万能开关
-    b"\xE3\xE3": DEVICE_TYPE_CURTAIN,       # 窗帘 ← 我们的
-    b"\x19\x39": DEVICE_TYPE_AC,            # 空调 ← 我们的
-    b"\x00\x0F": "unknown",                 # 未知设备
-}
+# Device classification by *reply* operate code lives in infer_device_type()
+# below (single source of truth). The former byte/name lookup tables here were
+# never consulted and were removed to stop them drifting from that logic.
+# Classification types are our integration types except 'curtain' and 'ac'
+# (the config flow maps those to cover/curtain_module and climate/ac).
 
 # Friendly labels for the classification types (config-flow checklist).
 SCAN_TYPE_LABELS: dict[str, str] = {
@@ -129,16 +116,6 @@ SCAN_TYPE_LABELS: dict[str, str] = {
     DEVICE_TYPE_CURTAIN: "窗帘",
     DEVICE_TYPE_BINARY_SENSOR: "干接点/万能开关",
     "unknown": "未知设备",
-}
-
-# Same table keyed by friendly operate-code name, derived from the enum so the
-# two can never drift apart. Discovered devices record op-code *names*, so the
-# classifier looks entries up here first.
-_OPERATE_CODE_NAMES = {oc.value: oc.name for oc in OperateCode}
-DEVICE_TYPE_BY_RESPONSE_NAME: dict[str, str] = {
-    _OPERATE_CODE_NAMES[code]: dtype
-    for code, dtype in DEVICE_TYPE_BY_RESPONSE.items()
-    if code in _OPERATE_CODE_NAMES
 }
 
 # Operate codes a keypad/panel *originates* when a button is pressed or when
