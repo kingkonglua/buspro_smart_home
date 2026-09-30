@@ -673,7 +673,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_LIGHT}_{subnet}_{dev_id}_{channel}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_LIGHT,
@@ -705,7 +705,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_SWITCH}_{subnet}_{dev_id}_{channel}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
@@ -738,7 +738,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_BINARY_SENSOR}_{subnet}_{dev_id}_{channel}_{subtype}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_BINARY_SENSOR,
@@ -772,7 +772,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_SENSOR}_{subnet}_{dev_id}_{subtype}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_SENSOR,
@@ -805,7 +805,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_COVER}_{subnet}_{dev_id}_{channel}_{subtype}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
@@ -841,7 +841,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_BUTTON}_{subnet}_{dev_id}_{switch_number}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_BUTTON,
@@ -877,7 +877,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_CLIMATE}_{subnet}_{dev_id}_{subtype}_{ac_number}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_CLIMATE,
@@ -914,7 +914,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             key = f"{DEVICE_TYPE_SCENE}_{subnet}_{dev_id}_{area_number}_{scene_number}"
 
             if key in self.devices:
-                errors["base"] = "该设备已存在"
+                errors["base"] = "already_exists"
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_SCENE,
