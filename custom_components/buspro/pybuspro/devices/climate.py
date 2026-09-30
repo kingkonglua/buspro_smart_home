@@ -49,7 +49,15 @@ class Climate(Device):
             self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.ControlFloorHeatingStatusResponse:
+            if len(telegram.payload) < 8:
+                return
             success_or_fail = telegram.payload[0]
+            # M-2: payload[0] is a raw int byte; SuccessOrFailure members are
+            # byte-valued enums, so the old `== SuccessOrFailure.Success`
+            # comparison was always False and the confirmation was applied
+            # unconditionally (a failed write would still overwrite state).
+            if success_or_fail != SuccessOrFailure.Success.value[0]:
+                return
             self._temperature_type = telegram.payload[1]
             self._status = telegram.payload[2]
             self._mode = telegram.payload[3]
@@ -58,9 +66,6 @@ class Climate(Device):
             self._night_temperature = telegram.payload[6]
             self._away_temperature = telegram.payload[7]
             self._call_device_updated()
-
-            if success_or_fail == SuccessOrFailure.Success:
-                self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.BroadcastTemperatureResponse:
             # channel_number = telegram.payload[0]
