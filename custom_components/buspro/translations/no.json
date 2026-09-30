@@ -10,8 +10,22 @@
         }
       }
     },
+    "abort": {
+      "already_configured": "Denne gatewayen er allerede konfigurert."
+    },
     "error": {
       "unknown": "En feil oppstod."
+    }
+  },
+  "options": {
+    "error": {
+      "already_exists": "Enheten {device_key} finnes allerede og kan ikke legges til på nytt.",
+      "gateway_unavailable": "Gatewayen er utilgjengelig, kan ikke fortsette."
+    },
+    "abort": {
+      "gateway_unavailable": "Gatewayen er utilgjengelig, kan ikke fortsette.",
+      "scan_failed": "Skanningen mislyktes. Sjekk nettverksforbindelsen og prøv igjen.",
+      "no_devices_found": "Ingen enheter funnet. Sjekk gateway-konfigurasjonen og bussforbindelsen."
     }
   }
 }

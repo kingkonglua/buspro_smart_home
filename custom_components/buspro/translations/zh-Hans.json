@@ -20,7 +20,15 @@
       }
     },
     "abort": {
-      "already_configured": "该网关已配置。"
+      "already_configured": "该网关已配置。",
+      "gateway_unavailable": "网关不可达，无法继续。",
+      "scan_failed": "扫描失败，请检查网络连接后重试。",
+      "no_devices_found": "未发现设备，请检查网关配置和总线连接。"
+    },
+    "error": {
+      "already_exists": "设备 {device_key} 已存在，不能重复添加。",
+      "gateway_unavailable": "网关不可达，无法继续。",
+      "unknown": "发生未知错误。"
     }
   },
   "options": {

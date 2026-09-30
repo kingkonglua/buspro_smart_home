@@ -20,7 +20,15 @@
       }
     },
     "abort": {
-      "already_configured": "This gateway is already configured."
+      "already_configured": "This gateway is already configured.",
+      "gateway_unavailable": "Gateway unavailable, cannot continue.",
+      "scan_failed": "Scan failed, check network connection and retry.",
+      "no_devices_found": "No devices found, check gateway configuration and bus connection."
+    },
+    "error": {
+      "already_exists": "Device {device_key} already exists and cannot be added again.",
+      "gateway_unavailable": "Gateway unavailable, cannot continue.",
+      "unknown": "An unknown error occurred."
     }
   },
   "options": {

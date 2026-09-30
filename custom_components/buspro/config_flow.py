@@ -668,6 +668,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
     async def async_step_add_light(self, user_input=None):
         """Step: add a light device."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -676,6 +677,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_LIGHT,
@@ -695,11 +699,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_add_switch(self, user_input=None):
         """Step: add a switch device."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -708,6 +714,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_SWITCH,
@@ -727,11 +736,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_add_binary_sensor(self, user_input=None):
         """Step: add a binary sensor device."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -741,6 +752,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_BINARY_SENSOR,
@@ -762,11 +776,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_add_sensor(self, user_input=None):
         """Step: add a sensor device (no channel)."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -775,6 +791,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_SENSOR,
@@ -794,11 +813,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_add_cover(self, user_input=None):
         """Step: add a cover (curtain) device."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -808,6 +829,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_COVER,
@@ -831,11 +855,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_add_button(self, user_input=None):
         """Step: add a button device (momentary universal switch output)."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -844,6 +870,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_BUTTON,
@@ -863,11 +892,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_add_climate(self, user_input=None):
         """Step: add a climate device (floor heating, AC module or panel AC)."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -880,6 +911,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_CLIMATE,
@@ -903,11 +937,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_add_scene(self, user_input=None):
         """Step: add a scene device (area_number.scene_number on a device)."""
         errors = {}
+        device_key_label = ""
         if user_input is not None:
             subnet = user_input[CONF_SUBNET_ID]
             dev_id = user_input[CONF_DEVICE_ID]
@@ -917,6 +953,9 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
 
             if key in self.devices:
                 errors["base"] = "already_exists"
+                device_key_label = self._get_device_display_name(
+                    key, self.devices[key]
+                )
             else:
                 self.devices[key] = {
                     CONF_DEVICE_TYPE: DEVICE_TYPE_SCENE,
@@ -940,6 +979,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
+            description_placeholders={"device_key": device_key_label},
         )
 
     async def async_step_remove_device(self, user_input=None):
