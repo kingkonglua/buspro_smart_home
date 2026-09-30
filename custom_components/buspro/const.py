@@ -66,6 +66,8 @@ BINARY_SENSOR_SUBTYPES = [
 SENSOR_SUBTYPES = [
     "illuminance",
     "temperature",
+    # M-10: humidity is decoded from the sensors-in-one frames (0x1605/0x1630).
+    "humidity",
 ]
 
 # Cover subtypes

@@ -29,6 +29,11 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# M-10: humidity subtype. Kept as plain strings so the module imports cleanly
+# against Home Assistant builds where these members are only exposed as
+# SensorDeviceClass.HUMIDITY / PERCENTAGE (both str-valued).
+CONF_HUMIDITY = "humidity"
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -76,6 +81,7 @@ class BusproSensor(SensorEntity):
         self._module = module
         self._temperature = None
         self._brightness = None
+        self._humidity = None
         self._received = False
         self.async_register_callbacks()
 
@@ -89,6 +95,7 @@ class BusproSensor(SensorEntity):
             if self._hass is not None:
                 self._temperature = self._device.temperature
                 self._brightness = self._device.brightness
+                self._humidity = self._device.humidity
                 self._received = True
                 self.async_write_ha_state()
 
@@ -120,6 +127,9 @@ class BusproSensor(SensorEntity):
         if self._sensor_type == ILLUMINANCE:
             return self._brightness is not None
 
+        if self._sensor_type == CONF_HUMIDITY:
+            return self._humidity is not None
+
         # Other types (e.g. dry_contact): do not report as permanently
         # available just because the gateway is connected. Require that the
         # device has actually reported its status at least once, otherwise a
@@ -135,6 +145,9 @@ class BusproSensor(SensorEntity):
         if self._sensor_type == ILLUMINANCE:
             return self._brightness
 
+        if self._sensor_type == CONF_HUMIDITY:
+            return self._humidity
+
         return None
 
     @property
@@ -145,6 +158,9 @@ class BusproSensor(SensorEntity):
             return SensorDeviceClass.TEMPERATURE
         if self._sensor_type == ILLUMINANCE:
             return SensorDeviceClass.ILLUMINANCE
+        if self._sensor_type == CONF_HUMIDITY:
+            # M-10: str-valued; valid even where the enum member is absent.
+            return CONF_HUMIDITY
         return None
 
     @property
@@ -154,6 +170,8 @@ class BusproSensor(SensorEntity):
             return "°C"
         if self._sensor_type == ILLUMINANCE:
             return "lux"
+        if self._sensor_type == CONF_HUMIDITY:
+            return "%"
         return None
 
     @property

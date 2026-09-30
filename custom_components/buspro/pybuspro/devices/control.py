@@ -47,6 +47,16 @@ class _Control:
             operate_code = OperateCode.ReadSensorsInOneStatus
             payload = []
 
+        elif type(control) == _ReadTemperature:
+            # M-10: channel-addressed panel temperature read (0xE3E7).
+            operate_code = OperateCode.ReadTemperature
+            payload = [control.channel_number if control.channel_number is not None else 1]
+
+        elif type(control) == _ReadMotionSensorStatus:
+            # M-10: motion-only status read (0xDB00) for CMS-PIR modules.
+            operate_code = OperateCode.ReadMotionSensorStatus
+            payload = []
+
         elif type(control) == _ReadFloorHeatingStatus:
             operate_code = OperateCode.ReadFloorHeatingStatus
             payload = []
@@ -155,6 +165,29 @@ class _ReadSensorStatus(_Control):
 
 
 class _ReadSensorsInOneStatus(_Control):
+    def __init__(self, buspro):
+        super().__init__(buspro)
+        # no more properties
+
+
+class _ReadTemperature(_Control):
+    """Channel-addressed temperature read (0xE3E7) for MPTL/panel devices.
+
+    M-10: upstream v5.0.7 added this for the Granite/Enviro panel family,
+    whose onboard sensor answers on channel 1.
+    """
+
+    def __init__(self, buspro):
+        super().__init__(buspro)
+        self.channel_number = 1
+
+
+class _ReadMotionSensorStatus(_Control):
+    """Motion-only status read (0xDB00) for CMS-PIR style modules.
+
+    M-10: these modules never answer the generic 0x1645 read, only 0xDB00.
+    """
+
     def __init__(self, buspro):
         super().__init__(buspro)
         # no more properties

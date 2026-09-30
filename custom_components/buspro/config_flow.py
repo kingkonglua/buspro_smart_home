@@ -619,6 +619,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                             options=[
                                 selector.SelectOptionDict(value="temperature", label="温度传感器"),
                                 selector.SelectOptionDict(value="illuminance", label="亮度传感器"),
+                                selector.SelectOptionDict(value="humidity", label="湿度传感器"),
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )

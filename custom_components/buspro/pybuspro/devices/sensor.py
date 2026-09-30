@@ -1,15 +1,16 @@
 import asyncio
+import struct
 
 # from ..helpers.generics import Generics
 from .control import _ReadSensorStatus, _ReadStatusOfUniversalSwitch, _ReadStatusOfChannels, _ReadFloorHeatingStatus, \
-    _ReadDryContactStatus, _ReadSensorsInOneStatus
+    _ReadDryContactStatus, _ReadSensorsInOneStatus, _ReadTemperature, _ReadMotionSensorStatus
 from .device import Device
 from ..helpers.enums import *
 
 
 class Sensor(Device):
     def __init__(self, buspro, device_address, universal_switch_number=None, channel_number=None, device=None,
-                 switch_number=None, name="", delay_read_current_state_seconds=0):
+                 switch_number=None, name="", delay_read_current_state_seconds=0, temperature_channel=1):
         super().__init__(buspro, device_address, name)
 
         self._buspro = buspro
@@ -19,8 +20,16 @@ class Sensor(Device):
         self._name = name
         self._device = device
         self._switch_number = switch_number
-        
+        # M-10: channel the MPTL/panel family's channel-addressed temperature
+        # read (0xE3E7/0xE3E8) answers on. Panels report every channel they
+        # own, so only accept this one rather than let channels fight.
+        self._temperature_channel = temperature_channel or 1
+
         self._current_temperature = None
+        # Sub-degree value from a panel/float32 temperature field. Carries the
+        # true value with no +20 bias, so it is preferred over the coarse byte.
+        self._current_temperature_precise = None
+        self._current_humidity = None
         self._brightness = None
         self._motion_sensor = None
         self._sonic = None
@@ -56,6 +65,10 @@ class Sensor(Device):
             if len(telegram.payload) < 10:
                 return
             self._current_temperature = telegram.payload[1]
+            # M-10: humidity (%RH) at payload[4]. 0xFF is HDL's "no humidity
+            # sensor fitted" sentinel -- keep None instead of showing 255%.
+            humidity = telegram.payload[4]
+            self._current_humidity = None if humidity == 0xFF else humidity
             self._motion_sensor = telegram.payload[7]
             self._dry_contact_1_status = telegram.payload[8]
             self._dry_contact_2_status = telegram.payload[9]
@@ -74,6 +87,11 @@ class Sensor(Device):
                 brightness_high = telegram.payload[1]
                 brightness_low = telegram.payload[2]
                 self._brightness = (brightness_high << 8) | brightness_low
+            # M-10: humidity sits one index lower than the polled 0x1605 frame
+            # (payload[3]); same 0xFF "not fitted" sentinel.
+            if len(telegram.payload) >= 4:
+                humidity = telegram.payload[3]
+                self._current_humidity = None if humidity == 0xFF else humidity
             self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.BroadcastSensorStatusResponse:
@@ -116,6 +134,40 @@ class Sensor(Device):
                 return
             self._current_temperature = telegram.payload[1]
             self._call_device_updated()
+
+        # M-10: MPTL/Enviro/Granite panel channel-addressed temperature
+        # (0xE3E8): [channel, signed_whole_degC, <float32 LE degC>]. The whole
+        # byte carries the true value with no +20 bias, so store it as the
+        # precise reading to keep the -20 calibration off it.
+        elif telegram.operate_code == OperateCode.ReadTemperatureResponse:
+            if len(telegram.payload) >= 2 and telegram.payload[0] == self._temperature_channel:
+                whole = telegram.payload[1]
+                if whole > 127:
+                    whole -= 256
+                self._current_temperature = whole
+                if len(telegram.payload) >= 6:
+                    try:
+                        self._current_temperature_precise = round(
+                            struct.unpack("<f", bytes(telegram.payload[2:6]))[0], 2
+                        )
+                    except (struct.error, ValueError, TypeError):
+                        self._current_temperature_precise = None
+                else:
+                    self._current_temperature_precise = float(whole)
+                self._call_device_updated()
+
+        # M-10: periodic illuminance push (0xE441) from a sensors-in-one
+        # module -- payload = [?, ?, lux_hi, lux_lo, ...].
+        elif telegram.operate_code == OperateCode.BroadcastLuminanceResponse:
+            if len(telegram.payload) >= 4:
+                self._brightness = (telegram.payload[2] << 8) | telegram.payload[3]
+                self._call_device_updated()
+
+        # M-10: CMS-PIR style motion-only module (0xDB01); motion flag at [3].
+        elif telegram.operate_code == OperateCode.ReadMotionSensorStatusResponse:
+            if len(telegram.payload) >= 4:
+                self._motion_sensor = telegram.payload[3]
+                self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.ReadStatusOfUniversalSwitchResponse:
             if len(telegram.payload) < 2:
@@ -191,6 +243,18 @@ class Sensor(Device):
             rsios = _ReadSensorsInOneStatus(self._buspro)
             rsios.subnet_id, rsios.device_id = self._device_address
             await rsios.send()
+        elif self._device is not None and self._device == "pir":
+            # M-10: CMS-PIR modules only answer 0xDB00, never the generic
+            # 0x1645 read.
+            rms = _ReadMotionSensorStatus(self._buspro)
+            rms.subnet_id, rms.device_id = self._device_address
+            await rms.send()
+        elif self._device is not None and self._device == "panel":
+            # M-10: MPTL/panel family channel-addressed temperature read.
+            rt = _ReadTemperature(self._buspro)
+            rt.subnet_id, rt.device_id = self._device_address
+            rt.channel_number = self._temperature_channel
+            await rt.send()
         else:
             rss = _ReadSensorStatus(self._buspro)
             rss.subnet_id, rss.device_id = self._device_address
@@ -198,6 +262,10 @@ class Sensor(Device):
 
     @property
     def temperature(self):
+        # M-10: a panel/float32 reading is already true Celsius, so prefer it
+        # over the coarse byte that still carries the +20 wire bias.
+        if self._current_temperature_precise is not None:
+            return self._current_temperature_precise
         if self._current_temperature is None:
             return None
         # HDL protocol encodes temperature as raw = actual + 20 to avoid
@@ -213,6 +281,12 @@ class Sensor(Device):
         if self._brightness is None:
             return None
         return self._brightness
+
+    @property
+    def humidity(self):
+        # M-10: decoded from the polled sensors-in-one frame (0x1605 [4]) or
+        # its 0x1630 push ([3]); None until a real reading arrives.
+        return self._current_humidity
 
     @property
     def movement(self):

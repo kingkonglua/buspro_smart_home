@@ -69,7 +69,14 @@ class AC(Device):
     def _apply_status_payload(self, payload):
         # A missing (None) / empty frame must never raise: the gateway drops
         # packets and devices go offline. Keep the last known state instead.
-        if not payload or len(payload) < 13:
+        #
+        # M-9: some HDL AC modules answer with a legal short frame. Upstream
+        # v5.0.7 (AirConditioner._telegram_received_cb) accepts anything from
+        # 12 bytes up; the previous `< 13` check silently discarded those
+        # frames. Accept the same 12-byte minimum, but only read the fields
+        # that are actually present so a short frame can never index past the
+        # end (payload[12] does not exist in a 12-byte frame).
+        if not payload or len(payload) < 12:
             return
         # Filter messages for our AC unit only (when more than one unit is present)
         ac_number = payload[0]
@@ -79,7 +86,7 @@ class AC(Device):
         # M-6: an all-0xFF status region is HDL's "no AC unit wired to this
         # slot" sentinel. Treating it as real state would make the entity look
         # available with fake values and replay 0xFF onto the bus on control.
-        if len(payload) >= 13 and all(b == 255 for b in payload[8:13]):
+        if all(b == 255 for b in payload[8:13]):
             self._available = False
             return
 
@@ -94,7 +101,10 @@ class AC(Device):
         self._mode = payload[9]
         self._fan_speed = payload[10]
         self._current_mode_temperature = payload[11]
-        self._sweep = payload[12]
+        # A 12-byte frame stops before the sweep byte; keep the last known
+        # value instead of raising IndexError.
+        if len(payload) >= 13:
+            self._sweep = payload[12]
         self._available = True
 
     async def read_status(self):

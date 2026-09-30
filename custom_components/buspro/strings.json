@@ -145,7 +145,7 @@
       },
       "scan_bus_devices": {
         "title": "选择要导入的设备",
-        "description": "Select devices to import. For sensors, choose subtype (temperature or illuminance) per device.",
+        "description": "Select devices to import. For sensors, choose subtype (temperature, illuminance or humidity) per device.",
         "data": {
           "devices": "要导入的设备",
           "sensor_subtypes": "传感器子类型"
