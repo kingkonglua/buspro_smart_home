@@ -529,10 +529,12 @@ class BusproACClimate(ClimateEntity):
             if ac_mode is None:
                 _LOGGER.error("Unrecognized hvac mode: %s", hvac_mode)
                 return
-            # set_mode() sends a full control command that already sets
-            # status=ON (control() defaults new_status to 1), so an extra
-            # turn_on() would be a redundant second command. Rely on set_mode.
-            await self._device.set_mode(ac_mode)
+            # F-2: selecting a non-off mode must also power the unit on.
+            # control() only defaults power to ON when the state has never
+            # been observed; a known-off unit (_status == 0) would otherwise
+            # stay off and the entity would keep reporting HVACMode.OFF.
+            # Send power=1 together with the mode in a single command.
+            await self._device.control(status=1, mode=ac_mode)
 
     async def async_set_temperature(self, **kwargs):
         """Set new target temperature."""
