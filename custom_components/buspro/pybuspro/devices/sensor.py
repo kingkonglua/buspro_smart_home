@@ -37,7 +37,6 @@ class Sensor(Device):
         if telegram.operate_code == OperateCode.ReadSensorStatusResponse:
             if len(telegram.payload) < 8:
                 return
-            success_or_fail = telegram.payload[0]
             self._current_temperature = telegram.payload[1]
             brightness_high = telegram.payload[2]
             brightness_low = telegram.payload[3]
@@ -45,9 +44,13 @@ class Sensor(Device):
             self._sonic = telegram.payload[5]
             self._dry_contact_1_status = telegram.payload[6]
             self._dry_contact_2_status = telegram.payload[7]
-            if success_or_fail == SuccessOrFailure.Success:
-                self._brightness = brightness_high + brightness_low
-                self._call_device_updated()
+            # F-3: payload[0] is a raw int byte; SuccessOrFailure members are
+            # byte-valued enums, so the old `== SuccessOrFailure.Success`
+            # comparison was always False and this reply never updated HA.
+            # Store the readings unconditionally (some firmware does not use
+            # 0xF8 in the success byte) and always notify listeners.
+            self._brightness = brightness_high + brightness_low
+            self._call_device_updated()
 
         elif telegram.operate_code == OperateCode.ReadSensorsInOneStatusResponse:
             if len(telegram.payload) < 10:
