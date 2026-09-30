@@ -87,6 +87,12 @@ for v in ([1], [1, 74], [1, 74, 0]):
 for v in (5, {"a": 1}, "[1]"):
     expect_invalid(f"inner rejects {v!r}", lambda v=v: inner(v))
 
-print()
-print(f"TOTAL FAIL={len(FAILS)}  ({', '.join(FAILS) if FAILS else 'none'})")
-sys.exit(1 if FAILS else 0)
+def test_bug8_service_schemas():
+    """Pytest entry point: same judgement as the standalone script below."""
+    assert not FAILS, "BUG-8 service schema failures: " + ", ".join(FAILS)
+
+
+if __name__ == "__main__":
+    print()
+    print(f"TOTAL FAIL={len(FAILS)}  ({', '.join(FAILS) if FAILS else 'none'})")
+    sys.exit(1 if FAILS else 0)

@@ -21,6 +21,8 @@ import os
 import re
 import sys
 
+import pytest
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 COMPONENT = os.path.join(HERE, "..", "custom_components", "buspro")
 STRINGS = os.path.join(COMPONENT, "strings.json")
@@ -59,7 +61,7 @@ def rel(path):
     return os.path.relpath(path, os.path.join(HERE, ".."))
 
 
-def test_a_load():
+def _load_all():
     print("== A. json.load all 4 files ==")
     loaded = {}
     for path in [STRINGS] + TRANSLATIONS:
@@ -69,6 +71,10 @@ def test_a_load():
         except Exception as exc:  # noqa: BLE001
             fail("A: %s failed json.load: %s" % (rel(path), exc))
     return loaded
+
+
+def test_a_load():
+    _load_all()
 
 
 def test_b_top_keys(strings, translations_data):
@@ -147,7 +153,7 @@ def test_e_form_steps(strings, source):
 
 
 def main():
-    loaded = test_a_load()
+    loaded = _load_all()
     if STRINGS not in loaded:
         print("\nRESULT: FAIL (%d failures)" % len(failures))
         return 1
@@ -165,6 +171,39 @@ def main():
         return 1
     print("\nRESULT: PASS (all parity assertions satisfied)")
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Pytest wiring
+#
+# The check functions below request ``strings`` / ``translations_data`` /
+# ``source``.  Originally they were plain module globals fed by ``main()``, so
+# pytest read the parameter names as missing fixtures.  These fixtures provide
+# the identical data, and the autouse guard turns the functions' ``failures``
+# log into a genuine assertion -- the FAIL/PASS judgement is unchanged.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def strings():
+    return load_json(STRINGS)
+
+
+@pytest.fixture(scope="module")
+def translations_data():
+    return {path: load_json(path) for path in TRANSLATIONS}
+
+
+@pytest.fixture(scope="module")
+def source():
+    return parse_config_flow()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _parity_failures_guard():
+    failures.clear()
+    yield
+    assert not failures, "i18n parity failures: %s" % (failures,)
 
 
 if __name__ == "__main__":

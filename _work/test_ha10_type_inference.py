@@ -194,8 +194,14 @@ check(
     f"got {len(cfgs_usw)}: {[k for k, _ in cfgs_usw]}",
 )
 
-print()
-print(f"TOTAL PASS={PASS} FAIL={FAIL}")
-if FAILURES:
-    print("FAILED: " + ", ".join(FAILURES))
-sys.exit(0 if FAIL == 0 else 1)
+def test_ha10_type_inference():
+    """Pytest entry point: same judgement as the standalone script below."""
+    assert FAIL == 0, "HA10 checks failed: " + ", ".join(FAILURES)
+
+
+if __name__ == "__main__":
+    print()
+    print(f"TOTAL PASS={PASS} FAIL={FAIL}")
+    if FAILURES:
+        print("FAILED: " + ", ".join(FAILURES))
+    sys.exit(0 if FAIL == 0 else 1)
