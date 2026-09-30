@@ -36,6 +36,19 @@
 2. 重启 Home Assistant
 3. 配置 → 设备与服务 → 添加集成 → 搜索 "HDL Buspro"
 
+## 常见问题:收不到广播 / 面板、传感器状态不更新
+
+主动点灯/开关能控制,但网关主动推送的**广播收不到**、状态一直不刷新,且日志没有明显报错——通常是 **UDP/6000 被占用**,集成静默退化到了随机临时端口(定向回包仍能收到,广播丢失)。
+
+自查 6000 占用:
+
+```bash
+ss -lunp | grep 6000
+# 或 netstat -lunp | grep 6000
+```
+
+若占用者是 HDL 官方调试软件/另一个 HA 实例等非本集成进程,关闭它后**重载 HDL Buspro 集成**即可。退化时 HA 日志会出现一条 WARNING(`Could not bind UDP port 6000 ...`,每次退化只记一次),诊断(设置 → 设备与服务 → HDL Buspro → ⋮ → 下载诊断)里的 `bound_to_default_port` 会变为 `false` 并附带 `degraded_port`。
+
 ## 支持设备
 
 - 灯(light)

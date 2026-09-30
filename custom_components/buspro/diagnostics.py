@@ -68,6 +68,21 @@ def _gateway_info(module) -> dict[str, Any]:
             getattr(hdl, "dropped_source_ips", set()) or []
         )
         gateway["started"] = getattr(hdl, "started", None)
+        # R6: expose whether the receive socket still owns UDP/6000. A boolean
+        # carries no sensitive data; the actual port is only surfaced when the
+        # listener degraded to an ephemeral one, so a healthy setup adds no
+        # port noise to the diagnostics payload.
+        network_interface = getattr(hdl, "network_interface", None)
+        udp_client = getattr(network_interface, "udp_client", None)
+        if udp_client is not None:
+            gateway["bound_to_default_port"] = getattr(
+                udp_client, "bound_to_default_port", None
+            )
+            if getattr(udp_client, "degraded_port_fallback", False):
+                gateway["degraded_port_fallback"] = True
+                gateway["degraded_port"] = getattr(
+                    udp_client, "degraded_port", None
+                )
     # The source-IP lists are sequences; redact their members explicitly.
     for key in GATEWAY_SEQUENCE_REDACT:
         if key in gateway:

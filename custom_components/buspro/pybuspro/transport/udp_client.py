@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import socket
 from typing import Callable
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class UDPClient:
@@ -48,6 +51,16 @@ class UDPClient:
         self.transport: asyncio.DatagramTransport | None = None
         self.closing = False
 
+        # R6: transport health, queryable by the diagnostics layer.
+        # ``bound_to_default_port`` is True only when we own the preferred
+        # receive port (UDP/6000). ``degraded_port_fallback`` is True when we
+        # had to fall back to an ephemeral port; ``degraded_port`` records it.
+        self.bound_to_default_port: bool = False
+        self.degraded_port_fallback: bool = False
+        self.degraded_port: int | None = None
+        # The fallback warning is emitted once per client, not per packet.
+        self._port_fallback_warned = False
+
     def _data_received_callback(self, data, address) -> None:
         self.callback(data, address)
 
@@ -86,17 +99,34 @@ class UDPClient:
                     pass
                 actual = sock.getsockname()
                 if bind_port == 0:
-                    self.buspro.logger.warning(
-                        "UDP port %s on %s was unavailable; using ephemeral "
-                        "port %s instead. Outbound commands will work, but "
-                        "broadcasts sent to UDP/%s by other devices will be "
-                        "missed.",
-                        port,
-                        bind_host or "*",
-                        actual[1],
-                        port,
-                    )
+                    # R6: silent degradation is the worst kind of failure.
+                    # Surface it loudly, exactly once per client, with the
+                    # expected port, the port actually used, and an actionable
+                    # hint.
+                    self.bound_to_default_port = False
+                    self.degraded_port_fallback = True
+                    self.degraded_port = actual[1]
+                    if not self._port_fallback_warned:
+                        self._port_fallback_warned = True
+                        _LOGGER.warning(
+                            "Could not bind UDP port %s on %s; falling back to "
+                            "ephemeral port %s. Outbound commands still work, "
+                            "but broadcasts the gateway sends to UDP/%s "
+                            "(255.255.255.255:%s) will not be received, so "
+                            "sensor/panel states may stop updating. Close "
+                            "whatever is holding UDP/%s (e.g. HDL official "
+                            "software) and reload the integration.",
+                            port,
+                            bind_host or "*",
+                            actual[1],
+                            port,
+                            port,
+                            port,
+                        )
                 else:
+                    self.bound_to_default_port = True
+                    self.degraded_port_fallback = False
+                    self.degraded_port = None
                     self.buspro.logger.debug("UDP socket bound to %s", actual)
                 return sock
             except OSError as ex:
