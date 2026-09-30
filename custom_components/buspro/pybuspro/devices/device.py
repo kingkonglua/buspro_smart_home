@@ -1,6 +1,65 @@
 ﻿import asyncio
+import time
 
 from .control import _ReadStatusOfChannels
+
+
+# HDL Buspro UDP telegrams carry no monotonic sequence number: the header is
+# only (advertised IP, "HDLMIRACLE", 0xAAAA), then length/source/device-type/
+# operate-code/target/payload/CRC.  There is therefore no in-frame way to tell
+# which of two frames was *sent* first.  The only ordering evidence a receiver
+# has is arrival order plus its own receive clock, which is what this guard
+# uses.
+#
+# A frame is treated as a retransmit / late reordered duplicate -- and dropped
+# -- only when it repeats the operate code of the frame that *immediately*
+# preceded it from the same source, and arrives within this window.  Two
+# things make this safe to apply to every device:
+#   * it is keyed on source address + operate code, never on payload values
+#     (a temperature reading is allowed to fall, a switch is allowed to flip);
+#   * any frame with a *different* operate code in between proves time moved
+#     forward, so the next same-code frame is still accepted.
+# 50 ms is far below the interval between two genuine HDL status updates but
+# far above LAN reordering jitter, so normal traffic is untouched.
+FRAME_REORDER_WINDOW_SECONDS = 0.05
+
+
+class FrameFreshnessGuard:
+    """Generic BUG-7 guard against stale/reordered frames overwriting state.
+
+    Kept in the device base module so every pybuspro client can share one
+    implementation; the dispatcher owns an instance because it is the single
+    choke point every inbound telegram passes through (and the point where a
+    frame is accepted *only if a device callback actually handled it* -- a
+    frame that merely raised or was ignored must not arm the guard).
+    """
+
+    def __init__(self, window=FRAME_REORDER_WINDOW_SECONDS, clock=None):
+        self._window = window
+        self._clock = clock or time.monotonic
+        self._last_op = {}
+        self._last_time = {}
+
+    def is_stale(self, source, operate_code):
+        """True if this frame is a late duplicate of the preceding one."""
+        if source is None or operate_code is None:
+            return False
+        last_op = self._last_op.get(source)
+        last_time = self._last_time.get(source)
+        if last_op is None or last_time is None or last_op != operate_code:
+            return False
+        return (self._clock() - last_time) < self._window
+
+    def mark_handled(self, source, operate_code):
+        """Remember the frame that was actually applied to device state."""
+        if source is None:
+            return
+        self._last_op[source] = operate_code
+        self._last_time[source] = self._clock()
+
+    def reset(self):
+        self._last_op.clear()
+        self._last_time.clear()
 
 
 class Device(object):

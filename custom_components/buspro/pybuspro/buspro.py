@@ -6,6 +6,9 @@ import logging
 
 from .helpers.enums import OperateCode
 from .transport.network_interface import NetworkInterface
+# Imported last: the devices package pulls in core.telegram/helpers, so it
+# must load only after helpers has finished initialising (avoids a cycle).
+from .devices.device import FrameFreshnessGuard
 
 
 class StateUpdater:
@@ -50,6 +53,11 @@ class Buspro:
 
         self.callback_all_messages = None
         self._telegram_received_cbs: list[dict] = []
+
+        # BUG-7: drop late/reordered duplicates before they can write state.
+        # See FrameFreshnessGuard for why arrival order + a local receive
+        # window is the only ordering evidence HDL telegrams offer.
+        self._frame_freshness = FrameFreshnessGuard()
 
         # Optional hook fired when the UDP transport is lost unexpectedly
         # (not on a clean stop()). Set by the integration's gateway wrapper.
@@ -116,6 +124,21 @@ class Buspro:
         source = telegram.source_address
         if source is not None:
             source = tuple(source)
+
+        # BUG-7 freshness guard: a frame that repeats the operate code of the
+        # frame that immediately preceded it from this source, within the
+        # reorder window, is a retransmit/reordered duplicate. Drop it so it
+        # cannot overwrite newer state, and do not fire any device-updated
+        # callback for it.  Payload values are deliberately NOT inspected.
+        if self._frame_freshness.is_stale(source, telegram.operate_code):
+            self.telegram_logger.debug(
+                "Dropped stale/reordered frame from %s op=%s",
+                source,
+                telegram.operate_code,
+            )
+            return
+
+        handled = False
         for cb in list(self._telegram_received_cbs):
             device_address = cb["device_address"]
             if device_address is not None and tuple(device_address) == source:
@@ -126,8 +149,14 @@ class Buspro:
                             cb["callback"](telegram, postfix)
                         else:
                             cb["callback"](telegram)
+                        handled = True
                     except Exception as err:  # noqa: BLE001
                         self.logger.warning("Telegram callback error: %s", err)
+        if handled:
+            # Only a frame a device actually applied may arm the guard: a
+            # frame that raised (e.g. payload=None) or matched no handler must
+            # not suppress the next legitimate frame.
+            self._frame_freshness.mark_handled(source, telegram.operate_code)
 
     def _notify_connection_lost(self) -> None:
         """Called by the transport when the socket dies unexpectedly."""
