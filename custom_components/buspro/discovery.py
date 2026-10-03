@@ -75,7 +75,7 @@ _PROVOCATIONS: tuple[tuple[object, list[int]], ...] = (
     (OperateCode.ReadStatusOfUniversalSwitch, [1]),
     (OperateCode.ReadStatusOfCurtainSwitch, [1]),
     (OperateCode.ReadStatusOfCurtainSwitch, [2]),
-    (OperateCode.ReadAcStatus, []),          # ← 新增：空调探测
+    (OperateCode.ReadAcStatus, [1]),         # ← 新增：空调探测（带 AC 编号）
     (OperateCode.ReadDeviceInfo, []),          # 通用设备探测
 )
 
@@ -569,4 +569,4 @@ class BusScanner:
             "Buspro bus scan (%.0fs): %d device(s) found:", duration, len(found)
         )
         for dev in found:
-            _LOGGER.info("  %s", dev.summary())
+            _LOGGER.debug("  %s", dev.summary())

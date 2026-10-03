@@ -1,4 +1,4 @@
-﻿"""Telegram data transfer object."""
+"""Telegram data transfer object."""
 from __future__ import annotations
 
 import json

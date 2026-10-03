@@ -112,8 +112,18 @@ class PanelAirConditioner(Device):
         self._current_temperature: float | None = None
 
         self._stopped = False
+        # F-A4/F-G4: strong refs to every background task so stop() can cancel
+        # them instead of letting the loops poll the bus after entity removal.
+        self._tasks: set[asyncio.Task] = set()
         self.register_telegram_received_cb(self._telegram_received_cb)
         self._start_background_reads()
+
+    def _spawn(self, coro) -> asyncio.Task:
+        """Track a fire-and-forget task so ``stop()`` can cancel it."""
+        task = asyncio.ensure_future(coro, loop=self._buspro.loop)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
 
     # ----- identity ---------------------------------------------------------
     @property
@@ -262,7 +272,7 @@ class PanelAirConditioner(Device):
                     pass
                 await asyncio.sleep(self._FIELD_READ_GAP)
 
-        asyncio.ensure_future(_readback(), loop=self._buspro.loop)
+        self._spawn(_readback())
 
     def _start_background_reads(self) -> None:
         async def _status_loop():
@@ -292,12 +302,15 @@ class PanelAirConditioner(Device):
                     pass
                 await asyncio.sleep(self._TEMPERATURE_SECONDS)
 
-        asyncio.ensure_future(_status_loop(), loop=self._buspro.loop)
-        asyncio.ensure_future(_temperature_loop(), loop=self._buspro.loop)
+        self._spawn(_status_loop())
+        self._spawn(_temperature_loop())
 
     def stop(self) -> None:
         """Stop background polling and detach from the bus."""
         self._stopped = True
+        for task in list(self._tasks):
+            task.cancel()
+        self._tasks.clear()
         self.unregister_telegram_received_cb(self._telegram_received_cb)
 
     # ----- commands ---------------------------------------------------------

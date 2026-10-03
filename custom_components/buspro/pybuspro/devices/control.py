@@ -1,5 +1,5 @@
 from ..core.telegram import Telegram
-from ..helpers.enums import OperateCode
+from ..helpers.enums import CurtainAction, OperateCode
 
 
 class _Control:
@@ -72,7 +72,13 @@ class _Control:
 
         elif type(control) == _CurtainControl:
             operate_code = OperateCode.CurtainSwitchControl
-            payload = [control.curtain_number, control.action.value]
+            # F-C1: the action is either a CurtainAction (open/close/stop on a
+            # normal channel) or a bare 0-100 int (direct position on No.=17).
+            action = control.action
+            payload = [
+                control.curtain_number,
+                action.value if isinstance(action, CurtainAction) else int(action),
+            ]
 
         elif type(control) == _ReadStatusOfCurtainSwitch:
             operate_code = OperateCode.ReadStatusOfCurtainSwitch
@@ -80,7 +86,7 @@ class _Control:
 
         elif type(control) == _ReadAcStatus:
             operate_code = OperateCode.ReadAcStatus
-            payload = []
+            payload = [control.ac_number if control.ac_number is not None else 1]
 
         elif type(control) == _ControlAcStatus:
             operate_code = OperateCode.ControlAcStatus
@@ -237,7 +243,9 @@ class _ReadStatusOfCurtainSwitch(_Control):
 class _ReadAcStatus(_Control):
     def __init__(self, buspro):
         super().__init__(buspro)
-        # no more properties
+        # F-A1: the official read request carries the AC number (Size=1,
+        # Index1 = AC No. 1-128). None falls back to 1 in the telegram builder.
+        self.ac_number = None
 
 
 class _ControlAcStatus(_Control):

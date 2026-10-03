@@ -1,4 +1,4 @@
-﻿from .ac import AC
+from .ac import AC
 from .climate import Climate, ControlFloorHeatingStatus
 from .control import *
 from .curtain import Curtain

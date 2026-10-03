@@ -408,10 +408,12 @@ class BusproACClimate(BusproEntityMixin, ClimateEntity):
         self._module = module
 
         self._enable_turn_on_off_backwards_compatibility = False
+        # F-A2: SWING_MODE removed. The sweep encoding this integration sent
+        # (byte13 low nibble) was inverted, so the button only ever appeared to
+        # work. Re-add once a capture confirms the 0x10/0x00 encoding.
         self._attr_supported_features = (
             ClimateEntityFeature.TARGET_TEMPERATURE
             | ClimateEntityFeature.FAN_MODE
-            | ClimateEntityFeature.SWING_MODE
             | ClimateEntityFeature.TURN_OFF
             | ClimateEntityFeature.TURN_ON
         )
@@ -425,7 +427,6 @@ class BusproACClimate(BusproEntityMixin, ClimateEntity):
             HVACMode.AUTO,
         ]
         self._attr_fan_modes = ["auto", "high", "medium", "low"]
-        self._attr_swing_modes = [SWING_OFF, SWING_ON]
         self._attr_min_temp = 16
         self._attr_max_temp = 30
         self._attr_target_temperature_step = 1
@@ -529,14 +530,6 @@ class BusproACClimate(BusproEntityMixin, ClimateEntity):
             return None
         return AC_TO_HA_FAN.get(fan_speed, "auto")
 
-    @property
-    def swing_mode(self) -> Optional[str]:
-        """Return current swing setting."""
-        sweep = self._device.sweep
-        if sweep is None:
-            return None
-        return SWING_ON if sweep == 1 else SWING_OFF
-
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
         """Set operation mode."""
         if hvac_mode == HVACMode.OFF:
@@ -558,6 +551,11 @@ class BusproACClimate(BusproEntityMixin, ClimateEntity):
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
+        # F-A6: clamp to the entity's declared range before it reaches the bus.
+        temperature = int(temperature)
+        temperature = max(
+            self._attr_min_temp, min(self._attr_max_temp, temperature)
+        )
         await self._device.set_temperature(temperature)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
@@ -567,10 +565,6 @@ class BusproACClimate(BusproEntityMixin, ClimateEntity):
             _LOGGER.error("Unrecognized fan mode: %s", fan_mode)
             return
         await self._device.set_fan_speed(ac_fan)
-
-    async def async_set_swing_mode(self, swing_mode: str) -> None:
-        """Set swing (sweep) mode."""
-        await self._device.set_sweep(1 if swing_mode == SWING_ON else 0)
 
 
 # noinspection PyAbstractClass
@@ -611,6 +605,16 @@ class BusproPanelACClimate(BusproEntityMixin, ClimateEntity):
         if callable(stop):
             stop()
         await super().async_will_remove_from_hass()
+
+    # F-A3: override the HA base-class default, which otherwise tries
+    # HEAT_COOL -> HEAT -> COOL and silently forces the unit to HEAT.
+    async def async_turn_on(self) -> None:
+        await self._device.turn_on()
+        self.async_write_ha_state()
+
+    async def async_turn_off(self) -> None:
+        await self._device.turn_off()
+        self.async_write_ha_state()
 
     @property
     def temperature_unit(self):

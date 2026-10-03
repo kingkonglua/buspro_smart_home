@@ -1,7 +1,9 @@
 {
   "domain": "buspro",
   "name": "HDL Buspro",
-  "codeowners": [],
+  "codeowners": [
+    "@kingkonglua"
+  ],
   "config_flow": true,
   "dependencies": [
     "network"

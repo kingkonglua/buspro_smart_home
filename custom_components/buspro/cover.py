@@ -18,6 +18,7 @@ import time
 
 from homeassistant.components.cover import (
     CoverEntity,
+    CoverDeviceClass,
     CoverEntityFeature,
     ATTR_POSITION,
 )
@@ -103,7 +104,7 @@ async def async_setup_entry(
         channel = coerce_int(device_config[CONF_CHANNEL], CONF_CHANNEL)
         subtype = device_config.get(CONF_SUBTYPE, COVER_SUBTYPE_CURTAIN_MODULE)
         travel_time = _coerce_travel_time(
-            device_config.get(CONF_TRAVEL_TIME, 15)
+            device_config.get(CONF_TRAVEL_TIME, 30)
         )
         name = device_config.get("name", f"Cover {subnet_id}-{device_id}-{channel}")
         device_address = (subnet_id, device_id)
@@ -138,9 +139,14 @@ class BusproCover(BusproEntityMixin, CoverEntity):
         # caller) can never compare a str against an int.
         self._travel_time = _coerce_travel_time(travel_time)
 
-        # Position tracking (travel time estimation), only for bus motors
+        # F-C1: the No.=17 position channel reports a true 0-100 position and
+        # is written directly. Every other curtain can only estimate a position
+        # from its configured travel time.
+        self._position_is_direct = bool(
+            getattr(device, "is_position_channel", False)
+        )
         self._supports_position = (
-            self._subtype == COVER_SUBTYPE_BUS_MOTOR and self._travel_time is not None
+            self._position_is_direct or self._travel_time is not None
         )
         self._fixed_position = None   # position when not moving
         self._direction = None        # 1 opening, -1 closing, None stopped
@@ -149,7 +155,20 @@ class BusproCover(BusproEntityMixin, CoverEntity):
         self._start_time = None
         self._stop_task = None
 
-        if self._supports_position:
+        # F-C6: the bus only reports discrete states (not a true position
+        # sensor), so HA must treat cover state as assumed/optimistic.
+        self._attr_assumed_state = True
+        self._attr_device_class = CoverDeviceClass.CURTAIN
+
+        if self._position_is_direct:
+            # The position channel has no "stop" semantic: its second byte is
+            # the percentage, so 0x00 would mean "fully closed", not "halt".
+            self._attr_supported_features = (
+                CoverEntityFeature.OPEN
+                | CoverEntityFeature.CLOSE
+                | CoverEntityFeature.SET_POSITION
+            )
+        elif self._supports_position:
             self._attr_supported_features = (
                 CoverEntityFeature.OPEN
                 | CoverEntityFeature.CLOSE
@@ -202,17 +221,33 @@ class BusproCover(BusproEntityMixin, CoverEntity):
             status == 2 (CURTAIN_CLOSE) -> at the closed limit, position 0
             status == 0 (CURTAIN_STOP)  -> stopped mid-way, pin the estimate
         """
+        # F-C1: the position channel carries the real position directly; it
+        # never goes through the estimate state machine.
+        if self._position_is_direct:
+            self._refresh_is_closed()
+            return
+
         status = self._device.status
+        source = getattr(self._device, "status_source", None)
 
         if status == CURTAIN_OPEN or status == CURTAIN_CLOSE:
-            # Absolute ground truth: snap to the limit and clear every movement
-            # flag.  The motor is already parked, so drop the scheduled stop too.
-            position = 100 if status == CURTAIN_OPEN else 0
-            self._snap_to_limit(position, cancel_stop=True)
+            if source == "control":
+                # Our own control echo only confirms the motor is heading for
+                # the limit -- it is NOT an end state. Never snap here.
+                if self._direction is not None:
+                    self._set_moving_flags(
+                        self._direction > 0, self._direction < 0
+                    )
+            elif self._direction is None:
+                # Reported by the bus/read (not our own echo): treat the
+                # discrete limit as ground truth.
+                position = 100 if status == CURTAIN_OPEN else 0
+                self._snap_to_limit(position, cancel_stop=True)
         elif status == CURTAIN_STOP:
-            # STOP: the current estimate freezes as the new stationary position
-            # and all movement flags are cleared.
-            self._fix_position()
+            if source != "control":
+                # A real STOP freezes the estimate; a STOP echo racing in right
+                # after a new move must not interrupt that move.
+                self._fix_position()
         elif self._direction is None:
             # Unknown status and no tracked movement: nothing is moving.
             self._set_moving_flags(False, False)
@@ -226,14 +261,20 @@ class BusproCover(BusproEntityMixin, CoverEntity):
 
     def _refresh_is_closed(self):
         """Keep ``is_closed`` consistent with the pinned position."""
+        if self._position_is_direct:
+            pos = self._device.position
+            self._attr_is_closed = None if pos is None else pos <= 0
+            return
         if self._supports_position:
             if self._direction is not None:
                 # While a movement is tracked the state is opening/closing, so
                 # leave is_closed untouched to avoid a transient "closed" flap.
                 return
-            self._attr_is_closed = (
-                self._fixed_position is not None and self._fixed_position <= 0
-            )
+            if self._fixed_position is None:
+                # Unknown position: report unknown rather than falsely "closed".
+                self._attr_is_closed = None
+            else:
+                self._attr_is_closed = self._fixed_position <= 0
         else:
             self._attr_is_closed = self._device.is_closed
 
@@ -270,11 +311,15 @@ class BusproCover(BusproEntityMixin, CoverEntity):
 
     def _estimate_position(self):
         """Estimate the current position (0 closed, 100 open) from travel time."""
+        if self._position_is_direct:
+            # F-C1: the position channel reports the real value; None = unknown.
+            return self._device.position
         if not self._supports_position:
             return None
         if self._fixed_position is None:
-            # Unknown position, fall back to 0 so an estimate is always numeric.
-            return 0
+            # Unknown is unknown: never pin it to 0 (which would read as
+            # "closed"). HA accepts None for a position-less cover state.
+            return None
         if self._direction is None or self._start_time is None:
             return self._fixed_position
         elapsed = time.monotonic() - self._start_time
@@ -334,6 +379,10 @@ class BusproCover(BusproEntityMixin, CoverEntity):
 
     def _schedule_stop(self, delay):
         """Schedule a stop command after the given delay."""
+        # F-C1: the position channel is written by value; a timed stop is
+        # meaningless (and sends [17,0] = fully closed).
+        if self._position_is_direct:
+            return
         if self._stop_task is not None:
             self._stop_task.cancel()
 
@@ -373,14 +422,19 @@ class BusproCover(BusproEntityMixin, CoverEntity):
     @property
     def unique_id(self):
         """Return the unique id, scoped to this entity's gateway."""
+        # F-G2: the config key includes the subtype, and the same (subnet,
+        # device, channel) can be configured both as curtain_module and
+        # bus_motor. Without the subtype the second entity is dropped.
         return gateway_scoped_unique_id(
-            self._module, self._device.device_identifier
+            self._module,
+            f"{self._device.device_identifier}-{self._subtype}",
         )
 
     @property
     def current_cover_position(self):
         """Return current position of cover (0 is closed, 100 is open)."""
-        return self._estimate_position()
+        pos = self._estimate_position()
+        return None if pos is None else int(round(pos))
 
     @property
     def is_closed(self):
@@ -401,20 +455,34 @@ class BusproCover(BusproEntityMixin, CoverEntity):
     async def async_open_cover(self, **kwargs):
         """Open the cover."""
         _LOGGER.debug("Opening cover '%s'", self._device.name)
-        if self._supports_position and self._start_movement(1):
-            self._schedule_stop(self._travel_time)
+        if self._position_is_direct:
+            # F-C1: position channel -- write 100% directly, no stop frame.
+            await self._device.set_position(100)
+            return
+        # F-C2: fully open/close is handed to the motor's own limit switches;
+        # scheduling a stop here made it halt halfway on the scan default.
+        if self._supports_position:
+            self._start_movement(1)
         await self._device.open()
 
     async def async_close_cover(self, **kwargs):
         """Close the cover."""
         _LOGGER.debug("Closing cover '%s'", self._device.name)
-        if self._supports_position and self._start_movement(-1):
-            self._schedule_stop(self._travel_time)
+        if self._position_is_direct:
+            await self._device.set_position(0)
+            return
+        if self._supports_position:
+            self._start_movement(-1)
         await self._device.close()
 
     async def async_stop_cover(self, **kwargs):
         """Stop the cover."""
         _LOGGER.debug("Stopping cover '%s'", self._device.name)
+        if self._position_is_direct:
+            # F-C1 NC-stop: no bus frame at all -- [17,0] would mean 0%.
+            if self._hass is not None:
+                self.async_write_ha_state()
+            return
         self._fix_position()
         await self._device.stop()
         if self._hass is not None:
@@ -424,6 +492,11 @@ class BusproCover(BusproEntityMixin, CoverEntity):
         """Set the cover position (percentage)."""
         position = kwargs.get(ATTR_POSITION)
         if position is None or not self._supports_position:
+            return
+
+        if self._position_is_direct:
+            # F-C1: direct 0-100 write on the position channel.
+            await self._device.set_position(int(position))
             return
 
         position = int(position)
@@ -448,6 +521,8 @@ class BusproCover(BusproEntityMixin, CoverEntity):
             started = self._start_movement(-1)
             await self._device.close()
 
-        if started:
+        # F-C2: only an intermediate target needs a timed stop; 0/100 are left
+        # to the motor's limit switches.
+        if started and position not in (0, 100):
             run_time = abs(delta) / 100.0 * self._travel_time
             self._schedule_stop(run_time)

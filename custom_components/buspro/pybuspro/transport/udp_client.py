@@ -34,6 +34,8 @@ class UDPClient:
 
         def error_received(self, exc) -> None:
             self.buspro.logger.warning("UDP error received: %s", exc)
+            # F-G1: a transport error is auxiliary liveness evidence.
+            self.buspro._notify_send_failure()  # noqa: SLF001
 
         def connection_lost(self, exc) -> None:
             self.buspro.logger.info("UDP transport closed: %s", exc)
@@ -183,7 +185,11 @@ class UDPClient:
                 self.transport.sendto(message, self._gateway_address_send)
             except OSError as err:
                 self.buspro.logger.warning("UDP send failed: %s", err)
+                self.buspro._notify_send_failure()  # noqa: SLF001
+            else:
+                self.buspro._notify_send_success()  # noqa: SLF001
         else:
             self.buspro.logger.info(
                 "Could not send message. Transport is None."
             )
+            self.buspro._notify_send_failure()  # noqa: SLF001

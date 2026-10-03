@@ -1,8 +1,9 @@
-﻿"""Top-level Buspro client object."""
+"""Top-level Buspro client object."""
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import deque
 
 from .helpers.enums import OperateCode
@@ -69,6 +70,12 @@ class Buspro:
         # (not on a clean stop()). Set by the integration's gateway wrapper.
         self.on_connection_lost = None
 
+        # F-G1: liveness evidence. ``last_rx_monotonic`` is positive proof the
+        # gateway answered (set on every inbound frame); ``_send_failures`` is
+        # a weaker auxiliary signal bumped by the transport on send errors.
+        self.last_rx_monotonic: float | None = None
+        self._send_failures = 0
+
         # Source-IP allowlist for incoming UDP frames. When non-empty, the
         # network interface drops datagrams from any other IP, so telegrams
         # broadcast by *other* HDL gateways/software on the same L2 segment
@@ -122,6 +129,8 @@ class Buspro:
         """Invoke per-device callbacks for an incoming telegram."""
         if telegram is None:
             return
+        # F-G1: any inbound frame is positive evidence the gateway is alive.
+        self.last_rx_monotonic = time.monotonic()
         self.telegram_logger.debug(telegram)
 
         if self.callback_all_messages is not None:
@@ -167,6 +176,18 @@ class Buspro:
             # frame that raised (e.g. payload=None) or matched no handler must
             # not suppress the next legitimate frame.
             self._frame_freshness.mark_handled(source, telegram.operate_code)
+
+    def _notify_send_failure(self) -> None:
+        """Record a transport send failure (auxiliary liveness signal)."""
+        self._send_failures += 1
+
+    def _notify_send_success(self) -> None:
+        """Clear the send-failure counter after a successful send."""
+        self._send_failures = 0
+
+    def reset_send_failures(self) -> None:
+        """Clear the send-failure counter (used after acting on it)."""
+        self._send_failures = 0
 
     def _notify_connection_lost(self) -> None:
         """Called by the transport when the socket dies unexpectedly."""

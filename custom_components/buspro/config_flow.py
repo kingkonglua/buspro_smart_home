@@ -513,7 +513,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                         CONF_DEVICE_ID: d,
                         CONF_CHANNEL: ch,
                         CONF_SUBTYPE: subtype,
-                        CONF_TRAVEL_TIME: 15,
+                        CONF_TRAVEL_TIME: 30,
                         "name": f"HDL {disc.address} curtain{ch}",
                     },
                 ))
@@ -534,7 +534,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                 ))
         elif classification == DEVICE_TYPE_CLIMATE:
             subtype = "floor_heating"
-            key = f"{DEVICE_TYPE_CLIMATE}_{s}_{d}_{subtype}_1"
+            key = f"{DEVICE_TYPE_CLIMATE}_{s}_{d}_{subtype}"
             configs.append((
                 key,
                 {
@@ -946,7 +946,7 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
                     CONF_DEVICE_ID: dev_id,
                     CONF_CHANNEL: channel,
                     CONF_SUBTYPE: subtype,
-                    CONF_TRAVEL_TIME: user_input.get(CONF_TRAVEL_TIME, 15),
+                    CONF_TRAVEL_TIME: user_input.get(CONF_TRAVEL_TIME, 30),
                     "name": user_input.get("name", f"Cover {subnet}-{dev_id}-{channel}"),
                 }
                 return await self.async_step_init()
@@ -956,9 +956,11 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Required(CONF_SUBNET_ID): int,
                 vol.Required(CONF_DEVICE_ID): int,
-                vol.Required(CONF_CHANNEL): int,
+                vol.Required(CONF_CHANNEL): vol.All(
+                    int, vol.Range(min=1, max=32)
+                ),
                 vol.Required(CONF_SUBTYPE): vol.In(COVER_SUBTYPES),
-                vol.Optional(CONF_TRAVEL_TIME, default=15): int,
+                vol.Optional(CONF_TRAVEL_TIME, default=30): int,
                 vol.Optional("name", default=""): str,
             }),
             errors=errors,
@@ -1014,7 +1016,13 @@ class BusproOptionsFlow(config_entries.OptionsFlow):
             # Only meaningful for the ac_panel subtype: which panel channel
             # carries the room-temperature reading (0 disables it).
             channel = user_input.get(CONF_CHANNEL, 1)
-            key = f"{DEVICE_TYPE_CLIMATE}_{subnet}_{dev_id}_{subtype}_{ac_number}"
+            # F-G2: floor_heating is addressed by the device address alone and
+            # has no ac_number, so including it would collide with any other
+            # subtype at the same (subnet, device).
+            if subtype == "floor_heating":
+                key = f"{DEVICE_TYPE_CLIMATE}_{subnet}_{dev_id}_{subtype}"
+            else:
+                key = f"{DEVICE_TYPE_CLIMATE}_{subnet}_{dev_id}_{subtype}_{ac_number}"
 
             if key in self.devices:
                 errors["base"] = "already_exists"

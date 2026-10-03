@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from .control import _ControlAcStatus, _ReadAcStatus
+from .control import _ControlAcStatus, _GenericControl, _ReadAcStatus
 from .device import Device
 from ..helpers.enums import *
 
@@ -35,6 +35,16 @@ class AC(Device):
     so the class keeps the last known state and merges partial updates on top of it.
     """
 
+    # F-A5: target temperature comes from the mode's own memory slot
+    # (V1.113 Index4-7), not from the response byte 12. FAN mode has no target
+    # temperature and is deliberately absent so ``target_temperature`` is None.
+    _TEMP_ATTR_FOR_MODE = {
+        AcMode.COOL.value: "_cooling_temperature",
+        AcMode.HEAT.value: "_heating_temperature",
+        AcMode.AUTO.value: "_auto_temperature",
+        AcMode.DRY.value: "_dry_temperature",
+    }
+
     def __init__(self, buspro, device_address, ac_number, name=""):
         super().__init__(buspro, device_address, name)
         # device_address = (subnet_id, device_id)
@@ -56,6 +66,7 @@ class AC(Device):
         self._sweep = None                  # 0 off, 1 on
         self._temperature_type = 0
         self._mode_and_fan = DEFAULT_MODE_AND_FAN
+        self._read_task = None              # F-A4: strong ref to startup read
 
         self.register_telegram_received_cb(self._telegram_received_cb)
         self._call_read_current_status(run_from_init=True)
@@ -102,16 +113,29 @@ class AC(Device):
         self._status = payload[8]
         self._mode = payload[9]
         self._fan_speed = payload[10]
-        self._current_mode_temperature = payload[11]
+        # F-A5: byte 11 of a 0x1939/0x193B response is "Current Mode and Fan"
+        # (bit coded), NOT the setpoint -- the old assignment here poisoned the
+        # cached target temperature with a mode/fan nibble. The real setpoint is
+        # read from the mode's memory slot (Index4-7) via target_temperature.
         # A 12-byte frame stops before the sweep byte; keep the last known
         # value instead of raising IndexError.
         if len(payload) >= 13:
             self._sweep = payload[12]
         self._available = True
 
-    async def read_status(self):
+    async def read_status(self, empty_payload=False):
+        if empty_payload:
+            # F-A1 fallback: some firmware only answers the legacy empty-payload
+            # read; keep the [] form reachable rather than dropping support.
+            ctrl = _GenericControl(self._buspro)
+            ctrl.subnet_id, ctrl.device_id = self._device_address
+            ctrl.operate_code = OperateCode.ReadAcStatus
+            ctrl.payload = []
+            await ctrl.send()
+            return
         rasc = _ReadAcStatus(self._buspro)
         rasc.subnet_id, rasc.device_id = self._device_address
+        rasc.ac_number = self._ac_number if self._ac_number is not None else 1
         await rasc.send()
 
     async def turn_on(self):
@@ -155,7 +179,8 @@ class AC(Device):
         dry = self._dry_temperature
 
         if temperature is not None:
-            temperature = int(temperature)
+            # F-A6: protocol-level backstop (AC setpoint is 0-40 C).
+            temperature = max(0, min(40, int(temperature)))
             if new_mode == AcMode.COOL.value:
                 cooling = temperature
             elif new_mode == AcMode.HEAT.value:
@@ -182,27 +207,18 @@ class AC(Device):
         if new_sweep is None:
             new_sweep = 0
 
-        # Refresh the active mode temperature when the mode changed, otherwise
-        # the cached value from the previous mode would be sent along.
-        mode_changed = (
-            self._mode is not None
-            and new_mode is not None
-            and self._mode != new_mode
-        )
-        current_mode_temperature = self._current_mode_temperature
-        if new_mode == AcMode.FAN.value:
-            # FAN mode has no target temperature; keep the previously
-            # known value instead of sending 0 (which the AC would
-            # interpret as an actual setpoint).
-            if current_mode_temperature is None:
-                current_mode_temperature = DEFAULT_TEMPERATURE
-        elif temperature is not None:
-            # F-1: an explicit temperature request must also drive byte 11
-            # (HDL "Setup Temperature"), which is what actually moves the
-            # unit -- writing only the per-mode memory slot left the unit on
-            # its old setpoint.
+        # F-A5: byte 12 (HDL "Setup Temperature") is derived from the active
+        # mode's own memory slot -- the same source target_temperature now
+        # reads -- instead of the response-polluted _current_mode_temperature.
+        if temperature is not None:
+            # An explicit request already updated the per-mode slot above and
+            # must drive byte 12 directly.
             current_mode_temperature = temperature
-        elif current_mode_temperature is None or mode_changed:
+        elif new_mode == AcMode.FAN.value:
+            # FAN mode has no target temperature; send the neutral default
+            # rather than 0 (which the AC could take as a real setpoint).
+            current_mode_temperature = DEFAULT_TEMPERATURE
+        else:
             current_mode_temperature = {
                 AcMode.COOL.value: cooling,
                 AcMode.HEAT.value: heating,
@@ -253,13 +269,30 @@ class AC(Device):
         self._call_device_updated()
 
     def _call_read_current_status(self, run_from_init=False):
+        # F-A4: never schedule without a running loop; wrap the task body so a
+        # failed read can't surface as an unhandled task exception.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
 
         async def read_current_status():
-            if run_from_init:
-                await asyncio.sleep(3)
-            await self.read_status()
+            try:
+                if run_from_init:
+                    await asyncio.sleep(3)
+                # F-A1: try the numbered read first, then the legacy empty
+                # payload read only if the unit has not answered.
+                await self.read_status()
+                if not self._got_initial_status:
+                    await asyncio.sleep(2)
+                    if not self._got_initial_status:
+                        await self.read_status(empty_payload=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                self._buspro.logger.debug("AC startup read failed")
 
-        asyncio.create_task(read_current_status())
+        self._read_task = asyncio.create_task(read_current_status())
 
     @property
     def is_on(self):
@@ -288,7 +321,11 @@ class AC(Device):
 
     @property
     def target_temperature(self):
-        return self._current_mode_temperature
+        # F-A5: per-mode memory slot; FAN (and unknown mode) -> None.
+        if self._mode is None:
+            return None
+        attr = self._TEMP_ATTR_FOR_MODE.get(self._mode)
+        return getattr(self, attr) if attr is not None else None
 
     @property
     def cooling_temperature(self):

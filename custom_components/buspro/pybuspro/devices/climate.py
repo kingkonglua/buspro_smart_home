@@ -32,6 +32,7 @@ class Climate(Device):
         self._day_temperature = None
         self._night_temperature = None
         self._away_temperature = None
+        self._read_task = None          # F-A4: strong ref to startup read
 
         self.register_telegram_received_cb(self._telegram_received_cb)
         self._call_read_current_heating_status(run_from_init=True)
@@ -139,16 +140,27 @@ class Climate(Device):
         await rfhs.send()
 
     def _call_read_current_heating_status(self, run_from_init=False):
+        # F-A4: guard against no loop and keep the task body from raising as an
+        # unhandled task exception.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
 
         async def read_current_heating_status():
-            if run_from_init:
-                await asyncio.sleep(5)
+            try:
+                if run_from_init:
+                    await asyncio.sleep(5)
 
-            rfhs = _ReadFloorHeatingStatus(self._buspro)
-            rfhs.subnet_id, rfhs.device_id = self._device_address
-            await rfhs.send()
+                rfhs = _ReadFloorHeatingStatus(self._buspro)
+                rfhs.subnet_id, rfhs.device_id = self._device_address
+                await rfhs.send()
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                self._buspro.logger.debug("Floor heating startup read failed")
 
-        asyncio.create_task(read_current_heating_status())
+        self._read_task = asyncio.create_task(read_current_heating_status())
 
     @property
     def unit_of_measurement(self):

@@ -10,6 +10,8 @@ import asyncio
 import inspect
 import logging
 import socket
+import time
+from datetime import timedelta
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
@@ -23,6 +25,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     DOMAIN,
@@ -42,10 +45,29 @@ EVENT_BUSPRO_CONNECTION_LOST = f"{DOMAIN}_connection_lost"
 # loss. The last value repeats until the gateway answers again.
 RECONNECT_DELAYS = [5, 10, 20, 30, 60]
 
+# F-G1: always-on gateway liveness probe. A silent UDP peer never triggers
+# ``connection_lost``, so once the link is idle for longer than
+# LIVENESS_IDLE_GRACE we actively probe a few devices that have answered
+# before. Any reply proves the gateway is healthy; LIVENESS_MAX_FAILURES
+# consecutive probe rounds with no reply at all declare it lost. The send
+# failure counter is only an auxiliary signal (UDP sendto often does not
+# raise, and error_received rarely fires).
+LIVENESS_INTERVAL = 30
+LIVENESS_IDLE_GRACE = 90
+LIVENESS_PROBE_WAIT = 5
+LIVENESS_MAX_FAILURES = 3
+SEND_FAILURE_THRESHOLD = 5
+PROBE_BATCH_MAX = 3
+
 # R2: errors that mean "the gateway/network is not ready yet" rather than "the
 # integration is broken". Converting these to ConfigEntryNotReady makes HA back
 # off and retry the entry setup instead of latching a permanent SETUP_ERROR.
 TRANSIENT_SETUP_ERRORS = (OSError, asyncio.TimeoutError, ConnectionError)
+
+# F-G3: bound the critical awaits in async_setup_entry so a hung hook or a
+# socket bind that never returns turns into ConfigEntryNotReady (retried by
+# HA) instead of blocking startup forever.
+SETUP_TIMEOUT = 30
 
 
 class BusproData(dict):
@@ -340,6 +362,7 @@ async def _async_rollback_failed_setup(hass, config_entry, buspro_module):
     bucket = hass.data.get(DOMAIN)
     if isinstance(bucket, dict):
         bucket.pop(config_entry.entry_id, None)
+    _forget_on_unload(config_entry.entry_id)
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
@@ -378,7 +401,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             )
         try:
             await existing.stop()
-            _discard_on_unload_callback(config_entry, existing.stop)
         except Exception as err:  # noqa: BLE001 - best effort, never fatal
             _LOGGER.warning(
                 "Could not stop previous Buspro module for entry %s: %s",
@@ -394,14 +416,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # on_connection_lost. Guarded with getattr so test doubles that replace
     # BusproModule with a bare object still work.
     configure_hooks = getattr(buspro_module, "async_configure_hooks", None)
-    if configure_hooks is not None:
-        await configure_hooks()
 
     # R2: a transient transport fault (gateway not up yet, DNS hiccup, port in
     # use) must become ConfigEntryNotReady so HA retries with backoff, instead
     # of a plain exception that HA latches as SETUP_ERROR and never retries.
+    # F-G3: both critical awaits are bounded by SETUP_TIMEOUT.
     try:
-        await buspro_module.start()
+        if configure_hooks is not None:
+            await asyncio.wait_for(configure_hooks(), timeout=SETUP_TIMEOUT)
+        await asyncio.wait_for(buspro_module.start(), timeout=SETUP_TIMEOUT)
     except TRANSIENT_SETUP_ERRORS as exc:
         await _async_rollback_failed_setup(hass, config_entry, buspro_module)
         raise ConfigEntryNotReady(
@@ -413,7 +436,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # R2: register teardown as soon as the socket is open. This covers the
     # unload path after a successful setup, and (together with the explicit
     # rollback below) the "start succeeded but platform forwarding failed" path.
-    config_entry.async_on_unload(buspro_module.stop)
+    _register_stop_on_unload(config_entry, buspro_module)
 
     # Forward setup to all platforms. Only transient faults are retried; any
     # other exception is a programming error and is allowed to propagate.
@@ -433,23 +456,40 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     return True
 
 
-def _discard_on_unload_callback(config_entry, callback) -> None:
-    """Drop a previously registered ``async_on_unload`` callback if present.
+_ON_UNLOAD_STOPS: dict = {}
 
-    Home Assistant clears a ConfigEntry's on-unload callbacks itself once the
-    unload completes, but we also stop the module explicitly in
-    ``async_unload_entry``. Detaching the matching callback here keeps the
-    entry from retaining a bound method -- and with it the module plus its UDP
-    socket -- after the entry is gone. That matters whenever an entry object is
-    re-set-up/re-unloaded (and for the lifecycle test harness): without it the
-    callback list grows one stopped module per cycle.
+
+def _register_stop_on_unload(config_entry, buspro_module) -> None:
+    """Register the on-unload stop callback for one config entry (idempotent).
+
+    ``ConfigEntry.async_on_unload`` keeps only one stable wrapper per entry;
+    the module it stops is looked up in our own module-level registry, so a
+    re-setup of an already-loaded entry (or a lifecycle test harness) updates
+    it in place instead of appending one bound ``module.stop`` -- and with it
+    the stopped module plus its UDP socket -- per cycle. Deliberately does not
+    read or write Home Assistant's private ConfigEntry internals.
     """
-    for attr in ("_on_unload", "_unload_callbacks"):
-        callbacks = getattr(config_entry, attr, None)
-        if not isinstance(callbacks, list):
-            continue
-        while callback in callbacks:
-            callbacks.remove(callback)
+    entry_id = config_entry.entry_id
+    if entry_id in _ON_UNLOAD_STOPS:
+        _ON_UNLOAD_STOPS[entry_id] = buspro_module
+        return
+    _ON_UNLOAD_STOPS[entry_id] = buspro_module
+
+    async def _stop_module_on_unload():
+        module = _ON_UNLOAD_STOPS.pop(entry_id, None)
+        if module is None:
+            return
+        try:
+            await module.stop()
+        except Exception as err:  # noqa: BLE001 - teardown must not abort
+            _LOGGER.debug("Error stopping Buspro module on unload: %s", err)
+
+    config_entry.async_on_unload(_stop_module_on_unload)
+
+
+def _forget_on_unload(entry_id) -> None:
+    """Drop our registry entry once a module is torn down explicitly."""
+    _ON_UNLOAD_STOPS.pop(entry_id, None)
 
 
 async def _async_update_options(hass: HomeAssistant, config_entry: ConfigEntry):
@@ -475,7 +515,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
         if buspro_module:
             await buspro_module.stop()
-            _discard_on_unload_callback(config_entry, buspro_module.stop)
+            _forget_on_unload(config_entry.entry_id)
 
         if not hass.data.get(DOMAIN):
             for service in (
@@ -503,6 +543,11 @@ class BusproModule:
         self._stop_listener_unsub = None
         self._stop_requested = False
         self._reconnect_task = None
+        # F-G1: liveness probe state.
+        self._liveness_unsub = None
+        self._liveness_busy = False
+        self._liveness_failures = 0
+        self._probe_index = 0
         # N-1: per-gateway cache of UniversalSwitch objects created by the
         # set_universal_switch service, so each channel registers its telegram
         # callback once instead of once per service call.  Cleared in stop().
@@ -755,6 +800,79 @@ class BusproModule:
                     err,
                 )
 
+    def _probe_candidates(self):
+        """Devices worth probing: ones that have already answered once.
+
+        Only devices with ``_got_initial_status`` and a callable
+        ``read_status`` are tried, so a gateway with nothing wired yet stays
+        optimistic instead of being declared dead.
+        """
+        if self.hdl is None:
+            return []
+        candidates = []
+        seen = set()
+        for entry in list(getattr(self.hdl, "_telegram_received_cbs", [])):
+            callback = entry.get("callback") if isinstance(entry, dict) else None
+            device = getattr(callback, "__self__", None)
+            if device is None or id(device) in seen:
+                continue
+            seen.add(id(device))
+            if (
+                getattr(device, "_got_initial_status", False)
+                and callable(getattr(device, "read_status", None))
+            ):
+                candidates.append(device)
+        return candidates
+
+    async def _liveness_tick(self, now=None):
+        """Periodic gateway liveness check (F-G1).
+
+        Only positive evidence counts: an idle-but-healthy gateway still
+        answers a probe. The probe set rotates and any single reply is enough.
+        """
+        if self._stop_requested or self._liveness_busy or self.hdl is None:
+            return
+        if not self.connected:
+            self._liveness_failures = 0
+            return
+        # Auxiliary signal: repeated send failures mean the socket is dead.
+        if getattr(self.hdl, "_send_failures", 0) >= SEND_FAILURE_THRESHOLD:
+            self.hdl.reset_send_failures()
+            self._handle_connection_lost()
+            return
+        last = getattr(self.hdl, "last_rx_monotonic", None)
+        if last is not None and (time.monotonic() - last) < LIVENESS_IDLE_GRACE:
+            # Recent traffic: nothing to do.
+            self._liveness_failures = 0
+            return
+        candidates = self._probe_candidates()
+        if not candidates:
+            # No device has ever answered -> keep the optimistic assumption.
+            return
+        self._liveness_busy = True
+        try:
+            start = self._probe_index % len(candidates)
+            batch = min(PROBE_BATCH_MAX, len(candidates))
+            healthy = False
+            for k in range(batch):
+                cand = candidates[(start + k) % len(candidates)]
+                before = getattr(self.hdl, "last_rx_monotonic", None)
+                await self._async_resync_device(cand)
+                await asyncio.sleep(LIVENESS_PROBE_WAIT)
+                if getattr(self.hdl, "last_rx_monotonic", None) != before:
+                    healthy = True
+                    break
+            self._probe_index = start + batch
+            if healthy:
+                self._liveness_failures = 0
+            else:
+                self._liveness_failures += 1
+                if self._liveness_failures >= LIVENESS_MAX_FAILURES:
+                    self._liveness_failures = 0
+                    self._handle_connection_lost()
+        finally:
+            self._liveness_busy = False
+
     @staticmethod
     async def _async_resync_device(device):
         """Ask one device for a fresh status read, through its own API."""
@@ -781,6 +899,19 @@ class BusproModule:
             EVENT_HOMEASSISTANT_STOP, self.stop
         )
         self.connected = True
+        # F-G1: always-on liveness probe. Registered once per start and kept
+        # across reconnects (the reconnect loop restarts hdl directly).
+        self._liveness_failures = 0
+        self._liveness_busy = False
+        self._probe_index = 0
+        previous_unsub = getattr(self, "_liveness_unsub", None)
+        if previous_unsub is not None:
+            previous_unsub()
+        self._liveness_unsub = async_track_time_interval(
+            self.hass,
+            self._liveness_tick,
+            timedelta(seconds=LIVENESS_INTERVAL),
+        )
 
     def _teardown_universal_switches(self):
         """Detach and drop every cached UniversalSwitch on this gateway.
@@ -820,6 +951,10 @@ class BusproModule:
         if unsub is not None:
             self._stop_listener_unsub = None
             unsub()
+        liveness_unsub = getattr(self, "_liveness_unsub", None)
+        if liveness_unsub is not None:
+            self._liveness_unsub = None
+            liveness_unsub()
         self._teardown_universal_switches()
         await self.hdl.stop()
 
